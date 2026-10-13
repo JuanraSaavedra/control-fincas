@@ -150,7 +150,7 @@ td.s{color:var(--stock);font-weight:600}
 const KEY='control-fincas-v1';
 const PESO_CAJA=2.5, PESO_PALET=25;
 let S=null, V={name:'home',id:null}, storageOK=true, delArm=false;
-let F={finca:'',variedad:'',modo:'todo'};
+let F={variedad:'',patron:'',modo:'todo'};
 
 /* ---------- utilidades ---------- */
 const $=id=>document.getElementById(id);
@@ -209,7 +209,7 @@ async function pdfSummary(){
   if(!list.length){setStatus('No hay datos con este filtro');return}
   const doc=new J({unit:'mm',format:'a4'});
   const fl=[];
-  if(F.finca){const ff=finca(F.finca);if(ff)fl.push('Finca: '+ff.name)}
+  if(F.patron.trim())fl.push('Finca: '+F.patron.trim());
   if(F.variedad){fl.push('Variedad: '+(varietyList()[F.variedad]||F.variedad))}
   doc.setTextColor(20);doc.setFontSize(18);doc.text('Resumen de fincas',14,18);
   doc.setFontSize(11);doc.text(c.name+' - '+showDate(today()),14,25);
@@ -389,38 +389,53 @@ function varietyList(){
   camp().fincas.forEach(function(f){const k=normV(f.variety);if(k&&!m[k])m[k]=String(f.variety).trim()});
   return m;
 }
+function matchPattern(name,pat){
+  pat=String(pat||'').trim();
+  if(!pat) return true;
+  const norm=x=>String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const n=norm(name), p=norm(pat);
+  if(p.indexOf('*')<0) return n.indexOf(p)>=0;
+  const re=new RegExp('^'+p.split('*').map(x=>x.replace(/[.+?^${}()|[\]\\]/g,'\\$&')).join('.*')+'$');
+  return re.test(n);
+}
 function filtered(){
-  return camp().fincas.filter(f=>(!F.finca||f.id===F.finca)&&(!F.variedad||normV(f.variety)===F.variedad));
+  return camp().fincas.filter(f=>(!F.variedad||normV(f.variety)===F.variedad)&&matchPattern(f.name,F.patron));
 }
 function summaryView(){
   const c=camp();
-  if(F.finca&&!c.fincas.find(f=>f.id===F.finca))F.finca='';
-  const vl=varietyList();
-  if(F.variedad&&!vl[F.variedad])F.variedad='';
-  let h='<div class="row" style="margin-bottom:10px">'+campSelect()+'<span class="spacer"></span><button class="btn" data-act="pdf-summary">Sacar PDF</button></div>';
-  h+='<div class="flt">'+
-    '<label class="fld"><span>Finca</span><select id="flFinca"><option value="">Todas</option>'+
-      c.fincas.map(f=>'<option value="'+f.id+'"'+(f.id===F.finca?' selected':'')+'>'+esc(f.name)+'</option>').join('')+'</select></label>'+
-    '<label class="fld"><span>Variedad</span><select id="flVar"><option value="">Todas</option>'+
-      Object.keys(vl).sort().map(k=>'<option value="'+esc(k)+'"'+(k===F.variedad?' selected':'')+'>'+esc(vl[k])+'</option>').join('')+'</select></label></div>';
-  h+='<label class="fld"><span>Mostrar</span><select id="flModo">'+
-    [['todo','Kilos y envases (por separado)'],['kilos','Solo kilos'],['envases','Solo envases']].map(o=>'<option value="'+o[0]+'"'+(o[0]===F.modo?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></label>';
+  let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'<span class="spacer"></span><button class="btn" data-act="pdf-summary">Listado PDF</button></div>';
   if(!c.fincas.length) return h+'<div class="empty">No hay fincas en esta campaña.</div>';
-  const list=filtered();
-  if(!list.length) return h+'<div class="empty">Ninguna finca coincide con el filtro.</div>';
-  const T={kg:0,c:0,p:0,n:0};
-  const data=list.map(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;T.n+=f.records.length;return {f:f,t:t}});
-  if(F.modo!=='envases'){
-    h+='<div class="sec"><h2>Kilos</h2></div><div class="tablewrap"><table><thead><tr><th>Finca</th><th>Variedad</th><th>Registros</th><th>Kilos totales</th></tr></thead><tbody>'+
-      data.map(d=>'<tr><td>'+esc(d.f.name)+'</td><td>'+esc(d.f.variety)+'</td><td>'+d.f.records.length+'</td><td class="k">'+fmt(d.t.kg,1)+'</td></tr>').join('')+
-      '</tbody><tfoot><tr><td colspan="2">Total</td><td>'+T.n+'</td><td>'+fmt(T.kg,1)+'</td></tr></tfoot></table></div>';
-  }
-  if(F.modo!=='kilos'){
-    h+='<div class="sec"><h2>Envases</h2></div><div class="tablewrap"><table><thead><tr><th>Finca</th><th>Variedad</th><th>Stock cajas</th><th>Stock palet</th></tr></thead><tbody>'+
-      data.map(d=>'<tr><td>'+esc(d.f.name)+'</td><td>'+esc(d.f.variety)+'</td><td class="s">'+fmt(d.t.c)+'</td><td class="s">'+fmt(d.t.p)+'</td></tr>').join('')+
-      '</tbody><tfoot><tr><td colspan="2">Total</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td></tr></tfoot></table></div>';
-  }
+  const T={kg:0,c:0,p:0};
+  const rows=c.fincas.map(function(f){
+    const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;
+    return '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
+  }).join('');
+  h+='<div class="tablewrap"><table><thead><tr><th>Finca</th><th>Variedad</th><th>Stock cajas</th><th>Stock palet</th><th>Kilos totales</th></tr></thead><tbody>'+rows+
+     '</tbody><tfoot><tr><td colspan="2">Total campaña</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td><td>'+fmt(T.kg,1)+'</td></tr></tfoot></table></div>';
   return h;
+}
+
+function listingSheet(){
+  const vl=varietyList();
+  openSheet('<h2>Listado PDF</h2>'+
+    '<label class="fld"><span>Variedad</span><select id="lVar"><option value="">Todas</option>'+
+      Object.keys(vl).sort().map(k=>'<option value="'+esc(k)+'"'+(k===F.variedad?' selected':'')+'>'+esc(vl[k])+'</option>').join('')+'</select></label>'+
+    '<label class="fld"><span>Finca (usa * como comodín)</span><input id="lPat" value="'+esc(F.patron)+'" placeholder="Ej.: C-*Bio   o   *Bio" autocomplete="off" autocapitalize="none" autocorrect="off"></label>'+
+    '<label class="fld"><span>Contenido</span><select id="lModo">'+
+      [['todo','Kilos y envases (por separado)'],['kilos','Solo kilos'],['envases','Solo envases']].map(o=>'<option value="'+o[0]+'"'+(o[0]===F.modo?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></label>'+
+    '<div class="note">Sin asterisco busca el texto dentro del nombre. «C-*Bio» = empieza por C- y acaba en Bio. «*Bio» = acaba en Bio.</div>'+
+    '<div class="note" id="lCount" style="color:var(--ink)"></div>'+
+    '<div class="row wrap2"><button class="btn" data-act="do-pdf-summary">Generar PDF</button><button class="btn ghost" data-act="close">Cancelar</button></div>');
+  updateListing();
+}
+function readListing(){F.variedad=$('lVar').value;F.patron=$('lPat').value;F.modo=$('lModo').value}
+function updateListing(){
+  if(!$('lVar'))return;
+  readListing();
+  const l=filtered(), el=$('lCount');
+  if(!l.length){el.textContent='Ninguna finca coincide con el filtro.';return}
+  const names=l.slice(0,12).map(f=>esc(f.name)).join(', ')+(l.length>12?'…':'');
+  el.innerHTML='<b>'+l.length+(l.length>1?' fincas':' finca')+':</b> '+names;
 }
 
 /* ---------- hojas (formularios) ---------- */
@@ -494,7 +509,8 @@ document.addEventListener('click',function(e){
   if(a==='back'){V={name:'home',id:null};render();return}
   if(a==='settings'){settings();return}
   if(a==='excel'){exportXlsx();return}
-  if(a==='pdf-summary'){pdfSummary();return}
+  if(a==='pdf-summary'){listingSheet();return}
+  if(a==='do-pdf-summary'){readListing();if(!filtered().length){updateListing();return}closeSheet();pdfSummary();return}
   if(a==='pdf-finca'){pdfFinca();return}
   if(a==='new-finca'){fincaForm(null);return}
   if(a==='open-finca'){V={name:'finca',id:t.dataset.id};render();window.scrollTo(0,0);return}
@@ -550,12 +566,11 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('input',function(e){
   if(e.target.id&&/^r(Ce|Pe|Tara|Bruto|Cs|Ps)$/.test(e.target.id))updatePreview();
+  if(e.target.id==='lPat')updateListing();
 });
 document.addEventListener('change',function(e){
-  if(e.target.id==='campSel'){S.current=e.target.value;F.finca='';F.variedad='';save();render()}
-  else if(e.target.id==='flFinca'){F.finca=e.target.value;render()}
-  else if(e.target.id==='flVar'){F.variedad=e.target.value;render()}
-  else if(e.target.id==='flModo'){F.modo=e.target.value;render()}
+  if(e.target.id==='campSel'){S.current=e.target.value;F.variedad='';F.patron='';save();render()}
+  else if(e.target.id==='lVar'||e.target.id==='lModo'){updateListing()}
 });
 
 load();render();save();
