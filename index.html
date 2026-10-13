@@ -422,9 +422,11 @@ document.addEventListener('click',function(e){
   }
   if(a==='restore'){
     try{
-      const d=JSON.parse($('backup').value);
+      const txt=$('backup').value.replace(/[\u201C\u201D\u201E]/g,'"').replace(/[\u2018\u2019]/g,"'").trim();
+      const d=JSON.parse(txt);
       if(!d||!Array.isArray(d.campaigns))throw new Error('x');
-      S=d;load();save();closeSheet();V={name:'home',id:null};render();
+      localStorage.setItem(KEY,JSON.stringify(d));
+      load();save();closeSheet();V={name:'home',id:null};render();
     }catch(err){t.textContent='Texto no válido'}
     return;
   }
