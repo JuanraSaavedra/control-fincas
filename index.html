@@ -10,8 +10,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Fincas">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" href="recoleccion-192.png">
-<link rel="apple-touch-icon" href="recoleccion-180.png">
+<link rel="icon" href="icono2-192.png">
+<link rel="apple-touch-icon" href="icono2-180.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -167,6 +167,7 @@ function load(){
   try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
   if(!S||!Array.isArray(S.campaigns)) S={campaigns:[],plates:[],current:null};
   if(!Array.isArray(S.plates)) S.plates=[];
+  if(!Array.isArray(S.varieties)) S.varieties=[];
   if(!S.campaigns.length){const c={id:uid(),name:defaultCampaignName(),fincas:[]};S.campaigns.push(c);S.current=c.id}
   if(!S.campaigns.find(c=>c.id===S.current)) S.current=S.campaigns[0].id;
 }
@@ -265,10 +266,10 @@ async function pdfFinca(){
 async function exportXlsx(){
   if(!window.XLSX){setStatus('El generador de Excel no se ha cargado. Conecta a internet una vez y reintenta.');return}
   const c=camp(), r2=x=>Math.round(x*100)/100;
-  const res=[['Finca','Variedad','Stock cajas','Stock palet','Kilos totales']];
+  const res=[['Finca','Variedad','Kilos totales','Stock cajas','Stock palet']];
   const T={kg:0,c:0,p:0};
-  c.fincas.forEach(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;res.push([f.name,f.variety||'',t.c,t.p,r2(t.kg)])});
-  res.push(['Total campaña','',T.c,T.p,r2(T.kg)]);
+  c.fincas.forEach(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;res.push([f.name,f.variety||'',r2(t.kg),t.c,t.p])});
+  res.push(['Total campaña','',r2(T.kg),T.c,T.p]);
   const reg=[['Finca','Variedad','Fecha','Matrícula','Cajas entrada','Palet entrada','Tara','Bruto','Cajas salida','Palet salida','Stock cajas','Stock palet','Peso neto kg','Observaciones']];
   c.fincas.forEach(function(f){
     f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0)).forEach(function(r){
@@ -383,6 +384,37 @@ function fincaView(f){
   return h;
 }
 
+/* ---------- variedades ---------- */
+const VAR_NARANJA=['Barberina','Cambria','Cara Cara','Chislett','Fukumoto','Lane Late','Midknight','Navel Foyos','Navelate','Navelina','Newhall','Powell','Salustiana','Sanguinelli','Tarocco','Thomson','Valencia Late','Washington Navel'];
+const VAR_MANDARINA=['Arrufatina','Basol','Clemenrubí','Clemensoon','Clemenules','Esbal','Fina','Fortune','Hernandina','Loretina','Marisol','Murcott','Nadorcott','Nova','Okitsu','Orogrande','Oronules','Oroval','Orri','Ortanique','Safor','Satsuma Owari','Tango','Tardivo'];
+const normA=x=>String(x==null?'':x).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const byEs=(a,b)=>a.localeCompare(b,'es');
+function varietyGroups(){
+  const g={n:VAR_NARANJA.slice(),m:VAR_MANDARINA.slice(),o:[]};
+  const known={};
+  g.n.concat(g.m).forEach(v=>{known[normA(v)]=1});
+  (S.varieties||[]).forEach(function(v){
+    const k=normA(v.n);if(!k||known[k])return;known[k]=1;
+    (v.t==='naranja'?g.n:v.t==='mandarina'?g.m:g.o).push(v.n);
+  });
+  S.campaigns.forEach(c=>c.fincas.forEach(function(f){
+    const k=normA(f.variety);if(k&&!known[k]){known[k]=1;g.o.push(String(f.variety).trim())}
+  }));
+  g.n.sort(byEs);g.m.sort(byEs);g.o.sort(byEs);
+  return g;
+}
+function canonicalVariety(name){
+  const k=normA(name), g=varietyGroups(), all=g.n.concat(g.m,g.o);
+  for(let i=0;i<all.length;i++){if(normA(all[i])===k)return all[i]}
+  return String(name).trim();
+}
+function registerVariety(name,tipo){
+  const k=normA(name);
+  if(VAR_NARANJA.concat(VAR_MANDARINA).some(v=>normA(v)===k))return;
+  if(S.varieties.some(v=>normA(v.n)===k))return;
+  S.varieties.push({n:name,t:tipo||'otra'});
+}
+
 const normV=v=>String(v||'').trim().toLowerCase();
 function varietyList(){
   const m={};
@@ -408,10 +440,10 @@ function summaryView(){
   const T={kg:0,c:0,p:0};
   const rows=c.fincas.map(function(f){
     const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;
-    return '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
+    return '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>';
   }).join('');
-  h+='<div class="tablewrap"><table><thead><tr><th>Finca</th><th>Variedad</th><th>Stock cajas</th><th>Stock palet</th><th>Kilos totales</th></tr></thead><tbody>'+rows+
-     '</tbody><tfoot><tr><td colspan="2">Total campaña</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td><td>'+fmt(T.kg,1)+'</td></tr></tfoot></table></div>';
+  h+='<div class="tablewrap"><table><thead><tr><th>Finca</th><th>Variedad</th><th>Kilos totales</th><th>Stock cajas</th><th>Stock palet</th></tr></thead><tbody>'+rows+
+     '</tbody><tfoot><tr><td colspan="2">Total campaña</td><td>'+fmt(T.kg,1)+'</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td></tr></tfoot></table></div>';
   return h;
 }
 
@@ -444,10 +476,24 @@ function openSheet(html){
 }
 function closeSheet(){$('layer').innerHTML='';delArm=false}
 
+function varietyOptions(cur){
+  const g=varietyGroups(), k=normA(cur);
+  const opt=v=>'<option value="'+esc(v)+'"'+(k&&normA(v)===k?' selected':'')+'>'+esc(v)+'</option>';
+  let h='<option value=""'+(k?'':' selected')+'>- Sin variedad -</option>';
+  h+='<optgroup label="Naranjas">'+g.n.map(opt).join('')+'</optgroup>';
+  h+='<optgroup label="Mandarinas">'+g.m.map(opt).join('')+'</optgroup>';
+  if(g.o.length)h+='<optgroup label="Otras">'+g.o.map(opt).join('')+'</optgroup>';
+  h+='<option value="__new__">+ Añadir variedad nueva...</option>';
+  return h;
+}
 function fincaForm(f){
   openSheet('<h2>'+(f?'Editar finca':'Nueva finca')+'</h2>'+
     '<label class="fld"><span>Finca</span><input id="fName" value="'+esc(f?f.name:'')+'" autocomplete="off"></label>'+
-    '<label class="fld"><span>Variedad</span><input id="fVar" value="'+esc(f?f.variety:'')+'" autocomplete="off"></label>'+
+    '<label class="fld"><span>Variedad</span><select id="fVarSel">'+varietyOptions(f?f.variety:'')+'</select></label>'+
+    '<div id="newVarBox" style="display:none"><div class="g2">'+
+      '<label class="fld"><span>Nombre de la variedad nueva</span><input id="fVarNew" autocomplete="off"></label>'+
+      '<label class="fld"><span>Tipo</span><select id="fVarType"><option value="naranja">Naranja</option><option value="mandarina">Mandarina</option><option value="otra">Otra</option></select></label>'+
+    '</div><div class="note" style="margin-top:-4px">Se guardará en la lista para las próximas fincas.</div></div>'+
     '<div class="row wrap2"><button class="btn" data-act="save-finca" data-id="'+(f?f.id:'')+'">Guardar finca</button>'+
     '<button class="btn ghost" data-act="close">Cancelar</button><span class="spacer"></span>'+
     (f?'<button class="btn danger" data-act="del-finca" data-id="'+f.id+'">Borrar finca</button>':'')+'</div>');
@@ -517,7 +563,13 @@ document.addEventListener('click',function(e){
   if(a==='edit-finca'){fincaForm(finca(V.id));return}
   if(a==='save-finca'){
     const name=$('fName').value.trim();if(!name){$('fName').focus();return}
-    const variety=$('fVar').value.trim();
+    let variety=$('fVarSel').value;
+    if(variety==='__new__'){
+      const nn=$('fVarNew').value.trim();
+      if(!nn){$('fVarNew').focus();return}
+      variety=canonicalVariety(nn);
+      registerVariety(variety,$('fVarType').value);
+    }
     if(t.dataset.id){const f=finca(t.dataset.id);f.name=name;f.variety=variety}
     else camp().fincas.push({id:uid(),name:name,variety:variety,ord:Date.now(),records:[]});
     save();closeSheet();render();return;
@@ -571,6 +623,10 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   if(e.target.id==='campSel'){S.current=e.target.value;F.variedad='';F.patron='';save();render()}
   else if(e.target.id==='lVar'||e.target.id==='lModo'){updateListing()}
+  else if(e.target.id==='fVarSel'){
+    const box=$('newVarBox');box.style.display=e.target.value==='__new__'?'block':'none';
+    if(e.target.value==='__new__')setTimeout(function(){$('fVarNew').focus()},30);
+  }
 });
 
 load();render();save();
