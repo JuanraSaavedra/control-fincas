@@ -141,7 +141,8 @@ td.s{color:var(--stock);font-weight:600}
 </div>
 <nav class="tabs" aria-label="Secciones">
   <button data-act="tab-home" id="tabHome">Fincas</button>
-  <button data-act="tab-summary" id="tabSummary">Resumen</button>
+  <button data-act="tab-kilos" id="tabKilos">Resumen kilos</button>
+  <button data-act="tab-envases" id="tabEnvases">Resumen envases</button>
 </nav>
 <div id="layer"></div>
 
@@ -318,17 +319,18 @@ function totals(f){
 /* ---------- vistas ---------- */
 function render(){
   const app=$('app');
-  let tab=V.name==='summary'?'summary':'home';
+  let tab=V.name==='summary'?(V.mode==='envases'?'envases':'kilos'):'home';
   if(V.name==='finca'){
     const f=finca(V.id); if(!f){V={name:'home',id:null};return render()}
     app.innerHTML=fincaView(f); $('title').textContent=f.name;
   } else if(V.name==='summary'){
-    app.innerHTML=summaryView(); $('title').textContent='Resumen';
+    app.innerHTML=summaryView(); $('title').textContent=V.mode==='envases'?'Resumen de envases':'Resumen de kilos';
   } else {
     app.innerHTML=homeView(); $('title').textContent='Control de fincas';
   }
   $('tabHome').setAttribute('aria-current',tab==='home'?'page':'false');
-  $('tabSummary').setAttribute('aria-current',tab==='summary'?'page':'false');
+  $('tabKilos').setAttribute('aria-current',tab==='kilos'?'page':'false');
+  $('tabEnvases').setAttribute('aria-current',tab==='envases'?'page':'false');
 }
 
 function campSelect(){
@@ -434,16 +436,23 @@ function filtered(){
   return camp().fincas.filter(f=>(!F.variedad||normV(f.variety)===F.variedad)&&matchPattern(f.name,F.patron));
 }
 function summaryView(){
-  const c=camp();
+  const c=camp(), envases=V.mode==='envases';
   let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'<span class="spacer"></span><button class="btn" data-act="pdf-summary">Listado PDF</button></div>';
   if(!c.fincas.length) return h+'<div class="empty">No hay fincas en esta campaña.</div>';
   const T={kg:0,c:0,p:0};
   const rows=c.fincas.map(function(f){
     const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;
-    return '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>';
+    return envases
+      ? '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>'
+      : '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
   }).join('');
-  h+='<div class="tablewrap"><table><thead><tr><th>Finca</th><th>Variedad</th><th>Kilos totales</th><th>Stock cajas</th><th>Stock palet</th></tr></thead><tbody>'+rows+
-     '</tbody><tfoot><tr><td colspan="2">Total campaña</td><td>'+fmt(T.kg,1)+'</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td></tr></tfoot></table></div>';
+  const head=envases
+    ? '<th>Finca</th><th>Variedad</th><th>Stock cajas</th><th>Stock palet</th>'
+    : '<th>Finca</th><th>Variedad</th><th>Kilos totales</th>';
+  const foot=envases
+    ? '<td colspan="2">Total campaña</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td>'
+    : '<td colspan="2">Total campaña</td><td>'+fmt(T.kg,1)+'</td>';
+  h+='<div class="tablewrap"><table style="min-width:0"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody><tfoot><tr>'+foot+'</tr></tfoot></table></div>';
   return h;
 }
 
@@ -551,11 +560,12 @@ document.addEventListener('click',function(e){
   if(a==='shade'){if(e.target===t)closeSheet();return}
   if(a==='close'){closeSheet();return}
   if(a==='tab-home'){V={name:'home',id:null};render();window.scrollTo(0,0);return}
-  if(a==='tab-summary'){V={name:'summary',id:null};render();window.scrollTo(0,0);return}
+  if(a==='tab-kilos'){V={name:'summary',mode:'kilos',id:null};render();window.scrollTo(0,0);return}
+  if(a==='tab-envases'){V={name:'summary',mode:'envases',id:null};render();window.scrollTo(0,0);return}
   if(a==='back'){V={name:'home',id:null};render();return}
   if(a==='settings'){settings();return}
   if(a==='excel'){exportXlsx();return}
-  if(a==='pdf-summary'){listingSheet();return}
+  if(a==='pdf-summary'){F.modo=V.mode==='envases'?'envases':'kilos';listingSheet();return}
   if(a==='do-pdf-summary'){readListing();if(!filtered().length){updateListing();return}closeSheet();pdfSummary();return}
   if(a==='pdf-finca'){pdfFinca();return}
   if(a==='new-finca'){fincaForm(null);return}
