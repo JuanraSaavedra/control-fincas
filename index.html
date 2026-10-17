@@ -370,7 +370,7 @@ function fincaView(f){
   } else {
     const list=f.records.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||(b.ts||0)-(a.ts||0));
     h+=list.map(r=>
-      '<button class="card rec" data-act="edit-rec" data-id="'+r.id+'">'+
+      '<div class="card rec" data-act="edit-rec" data-id="'+r.id+'">'+
       '<div class="r1"><div><span class="dt">'+showDate(r.fecha)+'</span> <span class="mt">'+esc(r.mat||'sin matrícula')+'</span></div>'+
       '<div class="neto">'+fmt(neto(r),1)+' <small>kg</small></div></div>'+
       '<div class="grid">'+
@@ -380,7 +380,9 @@ function fincaView(f){
       '<div><span>Salida cajas / palet</span><b>'+fmt(num(r.cs))+' / '+fmt(num(r.ps))+'</b></div>'+
       '<div class="stk"><span>Stock cajas</span><b>'+fmt(stockC(r))+'</b></div>'+
       '<div class="stk"><span>Stock palet</span><b>'+fmt(stockP(r))+'</b></div>'+
-      '</div>'+(r.obs?'<div class="obs"><b>Observaciones:</b> '+esc(r.obs)+'</div>':'')+'</button>'
+      '</div>'+(r.obs?'<div class="obs"><b>Observaciones:</b> '+esc(r.obs)+'</div>':'')+
+      '<div class="row" style="margin-top:12px"><button class="btn ghost" style="flex:1;min-height:40px" data-act="edit-rec" data-id="'+r.id+'">Modificar</button>'+
+      '<button class="btn danger" style="flex:1;min-height:40px" data-act="del-rec" data-id="'+r.id+'">Borrar</button></div></div>'
     ).join('');
   }
   return h;
@@ -600,7 +602,11 @@ document.addEventListener('click',function(e){
     save();closeSheet();render();return;
   }
   if(a==='del-rec'){
-    if(!delArm){delArm=true;t.textContent='Toca otra vez para borrar';return}
+    if(delArm!==t.dataset.id){
+      delArm=t.dataset.id;const old=t.textContent;t.textContent='¿Seguro? Toca otra vez';
+      setTimeout(function(){if(delArm===t.dataset.id&&t.isConnected){delArm=false;t.textContent=old}},4000);
+      return;
+    }
     const f=finca(V.id);f.records=f.records.filter(r=>r.id!==t.dataset.id);
     save();closeSheet();render();return;
   }
