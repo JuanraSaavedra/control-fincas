@@ -106,7 +106,8 @@ td.k{font-weight:600}
 td.s{color:var(--stock);font-weight:600}
 
 .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
-.tabs button{flex:1;border:0;background:transparent;min-height:56px;font-weight:600;color:var(--muted);font-size:15px}
+.tabs button{flex:1;border:0;background:transparent;min-height:56px;font-weight:600;color:var(--muted);font-size:13px;line-height:1.15;padding:0 2px}
+.tag{display:inline-block;font-size:11px;font-weight:600;background:var(--soft);color:var(--muted);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle}
 .tabs button[aria-current="page"]{color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
 
 .shade{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -141,6 +142,7 @@ td.s{color:var(--stock);font-weight:600}
 </div>
 <nav class="tabs" aria-label="Secciones">
   <button data-act="tab-home" id="tabHome">Fincas</button>
+  <button data-act="tab-done" id="tabDone">Recolectadas</button>
   <button data-act="tab-kilos" id="tabKilos">Resumen kilos</button>
   <button data-act="tab-envases" id="tabEnvases">Resumen envases</button>
 </nav>
@@ -319,16 +321,19 @@ function totals(f){
 /* ---------- vistas ---------- */
 function render(){
   const app=$('app');
-  let tab=V.name==='summary'?(V.mode==='envases'?'envases':'kilos'):'home';
+  let tab=V.name==='summary'?(V.mode==='envases'?'envases':'kilos'):V.name==='done'?'done':'home';
   if(V.name==='finca'){
     const f=finca(V.id); if(!f){V={name:'home',id:null};return render()}
-    app.innerHTML=fincaView(f); $('title').textContent=f.name;
+    app.innerHTML=fincaView(f); $('title').textContent=f.name; if(f.done)tab='done';
   } else if(V.name==='summary'){
     app.innerHTML=summaryView(); $('title').textContent=V.mode==='envases'?'Resumen de envases':'Resumen de kilos';
+  } else if(V.name==='done'){
+    app.innerHTML=doneView(); $('title').textContent='Fincas recolectadas';
   } else {
     app.innerHTML=homeView(); $('title').textContent='Control de fincas';
   }
   $('tabHome').setAttribute('aria-current',tab==='home'?'page':'false');
+  $('tabDone').setAttribute('aria-current',tab==='done'?'page':'false');
   $('tabKilos').setAttribute('aria-current',tab==='kilos'?'page':'false');
   $('tabEnvases').setAttribute('aria-current',tab==='envases'?'page':'false');
 }
@@ -338,32 +343,40 @@ function campSelect(){
     S.campaigns.map(c=>'<option value="'+c.id+'"'+(c.id===S.current?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select>';
 }
 
+function fincaCard(f){
+  const t=totals(f);
+  return '<button class="card fcard" data-act="open-finca" data-id="'+f.id+'">'+
+    '<div class="nm">'+esc(f.name)+'</div><div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
+    '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,1)+'</div></div>'+
+    '<div class="stat stk"><div class="l">Stock cajas</div><div class="v">'+fmt(t.c)+'</div></div>'+
+    '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div></button>';
+}
 function homeView(){
-  const c=camp();
+  const c=camp(), act=c.fincas.filter(f=>!f.done);
   let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'<span class="spacer"></span><button class="btn" data-act="new-finca">Añadir finca</button></div>';
-  if(!c.fincas.length){
-    h+='<div class="empty">Aún no hay fincas en esta campaña.<br>Toca «Añadir finca» para crear la primera.</div>';
-  } else {
-    h+=c.fincas.map(f=>{
-      const t=totals(f);
-      return '<button class="card fcard" data-act="open-finca" data-id="'+f.id+'">'+
-        '<div class="nm">'+esc(f.name)+'</div><div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros</div>'+
-        '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,1)+'</div></div>'+
-        '<div class="stat stk"><div class="l">Stock cajas</div><div class="v">'+fmt(t.c)+'</div></div>'+
-        '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div></button>';
-    }).join('');
-  }
+  if(!c.fincas.length) h+='<div class="empty">Aún no hay fincas en esta campaña.<br>Toca «Añadir finca» para crear la primera.</div>';
+  else if(!act.length) h+='<div class="empty">Todas las fincas están recolectadas.<br>Las tienes en la pestaña «Recolectadas».</div>';
+  else h+=act.map(fincaCard).join('');
   return h;
+}
+function doneView(){
+  const c=camp(), dn=c.fincas.filter(f=>f.done);
+  let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'</div>';
+  if(!dn.length) return h+'<div class="empty">Todavía no hay fincas recolectadas.<br>Dentro de una finca, pulsa «Fin recolección» y pasará aquí.</div>';
+  return h+dn.map(fincaCard).join('');
 }
 
 function fincaView(f){
   const t=totals(f);
   let h='<div class="row" style="margin-bottom:10px"><button class="iconbtn" data-act="back">Volver</button><span class="spacer"></span><button class="iconbtn" data-act="edit-finca">Editar finca</button></div>';
-  h+='<section class="head"><h2 class="nm">'+esc(f.name)+'</h2><div class="vr">'+esc(f.variety||'Sin variedad')+'</div>'+
+  h+='<section class="head"><h2 class="nm">'+esc(f.name)+'</h2><div class="vr">'+esc(f.variety||'Sin variedad')+'</div>'+(f.done?'<div class="vr">Recolectada el '+showDate(f.doneDate)+'</div>':'')+
      '<div class="kg">'+fmt(t.kg,1)+'<small>kg totales</small></div>'+
      '<div class="two"><div><div class="l">Stock cajas finca</div><div class="v">'+fmt(t.c)+'</div></div>'+
      '<div><div class="l">Stock palet finca</div><div class="v">'+fmt(t.p)+'</div></div></div></section>';
   h+='<div class="row"><button class="btn" style="flex:1" data-act="new-rec">Nuevo registro</button><button class="btn ghost" data-act="pdf-finca">PDF finca</button></div>';
+  h+=f.done
+    ? '<button class="btn ghost block" style="margin-top:10px" data-act="reopen-finca" data-id="'+f.id+'">Reabrir finca</button>'
+    : '<button class="btn ghost block" style="margin-top:10px" data-act="end-finca" data-id="'+f.id+'">Fin recolección</button>';
   h+='<div class="sec"><h2>Registros</h2><span class="note" style="margin:0">'+f.records.length+'</span></div>';
   if(!f.records.length){
     h+='<div class="empty">Sin registros todavía.</div>';
@@ -445,8 +458,8 @@ function summaryView(){
   const rows=c.fincas.map(function(f){
     const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;
     return envases
-      ? '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>'
-      : '<tr><td>'+esc(f.name)+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
+      ? '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>'
+      : '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
   }).join('');
   const head=envases
     ? '<th>Finca</th><th>Variedad</th><th>Stock cajas</th><th>Stock palet</th>'
@@ -564,7 +577,24 @@ document.addEventListener('click',function(e){
   if(a==='tab-home'){V={name:'home',id:null};render();window.scrollTo(0,0);return}
   if(a==='tab-kilos'){V={name:'summary',mode:'kilos',id:null};render();window.scrollTo(0,0);return}
   if(a==='tab-envases'){V={name:'summary',mode:'envases',id:null};render();window.scrollTo(0,0);return}
-  if(a==='back'){V={name:'home',id:null};render();return}
+  if(a==='back'){const ff=V.id?finca(V.id):null;V={name:ff&&ff.done?'done':'home',id:null};render();return}
+  if(a==='tab-done'){V={name:'done',id:null};render();window.scrollTo(0,0);return}
+  if(a==='end-finca'){
+    const key='end'+t.dataset.id;
+    if(delArm!==key){
+      delArm=key;const old=t.textContent;t.textContent='¿Cerrar la recolección de esta finca? Toca otra vez';
+      setTimeout(function(){if(delArm===key&&t.isConnected){delArm=false;t.textContent=old}},4000);
+      return;
+    }
+    const f=finca(t.dataset.id);delArm=false;
+    if(f){f.done=true;f.doneDate=today();save()}
+    V={name:'done',id:null};render();window.scrollTo(0,0);return;
+  }
+  if(a==='reopen-finca'){
+    const f=finca(t.dataset.id);
+    if(f){f.done=false;f.doneDate='';save()}
+    V={name:'home',id:null};render();window.scrollTo(0,0);return;
+  }
   if(a==='settings'){settings();return}
   if(a==='excel'){exportXlsx();return}
   if(a==='pdf-summary'){F.modo=V.mode==='envases'?'envases':'kilos';listingSheet();return}
