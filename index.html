@@ -138,6 +138,7 @@ td.s{color:var(--stock);font-weight:600}
   </div>
   <div class="status"><span id="status">Datos en este móvil</span></div>
   <div id="warn"></div>
+  <div id="bk"></div>
   <main id="app"></main>
 </div>
 <nav class="tabs" aria-label="Secciones">
@@ -266,39 +267,131 @@ async function pdfFinca(){
   setStatus('PDF generado · '+hhmm());
 }
 
+/* ---------- copia de seguridad en Excel ---------- */
+const BACKUP_DIAS=7;
+function daysSince(iso){
+  const a=new Date(iso+'T00:00:00'), b=new Date(today()+'T00:00:00');
+  return Math.round((b-a)/86400000);
+}
+function backupBanner(){
+  const el=$('bk');if(!el)return;
+  const hasData=S.campaigns.some(c=>c.fincas.some(f=>f.records.length));
+  if(!hasData){el.innerHTML='';return}
+  const d=S.lastBackup?daysSince(S.lastBackup):null;
+  if(d!==null&&d<BACKUP_DIAS){el.innerHTML='';return}
+  el.innerHTML='<div class="warn"><b>Copia de seguridad.</b> '+
+    (d===null?'Todavía no has hecho ninguna copia en Excel.':'Hace '+d+(d===1?' día':' días')+' de tu última copia en Excel.')+
+    '<button class="iconbtn" style="min-height:36px;margin-top:8px;display:block" data-act="excel">Hacer copia ahora</button></div>';
+}
+function markBackup(){S.lastBackup=today();save();backupBanner()}
+
 async function exportXlsx(){
   if(!window.XLSX){setStatus('El generador de Excel no se ha cargado. Conecta a internet una vez y reintenta.');return}
   const c=camp(), r2=x=>Math.round(x*100)/100;
   const res=[['Finca','Variedad','Kilos totales','Stock cajas','Stock palet']];
   const T={kg:0,c:0,p:0};
   c.fincas.forEach(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;res.push([f.name,f.variety||'',r2(t.kg),t.c,t.p])});
-  res.push(['Total campaña','',r2(T.kg),T.c,T.p]);
-  const reg=[['Finca','Variedad','Fecha','Matrícula','Cajas entrada','Palet entrada','Tara','Bruto','Cajas salida','Palet salida','Stock cajas','Stock palet','Peso neto kg','Observaciones']];
-  c.fincas.forEach(function(f){
-    f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0)).forEach(function(r){
-      reg.push([f.name,f.variety||'',showDate(r.fecha),r.mat||'',num(r.ce),num(r.pe),num(r.tara),num(r.bruto),num(r.cs),num(r.ps),stockC(r),stockP(r),r2(neto(r)),r.obs||'']);
+  res.push(['Total '+c.name,'',r2(T.kg),T.c,T.p]);
+  const fin=[['Campaña','Finca','Variedad','Estado','Fecha fin']];
+  const reg=[['Campaña','Finca','Variedad','Fecha','Matrícula','Cajas entrada','Palet entrada','Tara','Bruto','Cajas salida','Palet salida','Stock cajas','Stock palet','Peso neto kg','Observaciones']];
+  S.campaigns.forEach(function(cp){
+    cp.fincas.forEach(function(f){
+      fin.push([cp.name,f.name,f.variety||'',f.done?'Recolectada':'En curso',f.done?showDate(f.doneDate):'']);
+      f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0)).forEach(function(r){
+        reg.push([cp.name,f.name,f.variety||'',showDate(r.fecha),r.mat||'',num(r.ce),num(r.pe),num(r.tara),num(r.bruto),num(r.cs),num(r.ps),stockC(r),stockP(r),r2(neto(r)),r.obs||'']);
+      });
     });
   });
   const wb=XLSX.utils.book_new();
-  const w1=XLSX.utils.aoa_to_sheet(res);w1['!cols']=[{wch:22},{wch:18},{wch:13},{wch:13},{wch:15}];
-  const w2=XLSX.utils.aoa_to_sheet(reg);w2['!cols']=[{wch:20},{wch:16},{wch:12},{wch:12},{wch:13},{wch:13},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:34}];
+  const w1=XLSX.utils.aoa_to_sheet(res);w1['!cols']=[{wch:22},{wch:18},{wch:15},{wch:13},{wch:13}];
+  const w2=XLSX.utils.aoa_to_sheet(fin);w2['!cols']=[{wch:20},{wch:22},{wch:18},{wch:13},{wch:12}];
+  const w3=XLSX.utils.aoa_to_sheet(reg);w3['!cols']=[{wch:20},{wch:20},{wch:16},{wch:12},{wch:12},{wch:13},{wch:13},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:34}];
   XLSX.utils.book_append_sheet(wb,w1,'Resumen');
-  XLSX.utils.book_append_sheet(wb,w2,'Registros');
+  XLSX.utils.book_append_sheet(wb,w2,'Fincas');
+  XLSX.utils.book_append_sheet(wb,w3,'Registros');
   const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-  const name=('Fincas '+c.name+' '+today()).replace(/[\\/:*?"<>|]/g,'-')+'.xlsx';
+  const name=safeName('Control fincas copia '+today())+'.xlsx';
   const mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const blob=new Blob([buf],{type:mime});
   try{
     const file=new File([blob],name,{type:mime});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
       await navigator.share({files:[file],title:name});
-      setStatus('Excel guardado · '+hhmm());return;
+      markBackup();setStatus('Copia en Excel guardada · '+hhmm());return;
     }
   }catch(e){if(e&&e.name==='AbortError')return}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(function(){URL.revokeObjectURL(a.href)},5000);
-  setStatus('Excel descargado · '+hhmm());
+  markBackup();setStatus('Copia en Excel descargada · '+hhmm());
+}
+
+function parseDate(v){
+  if(typeof v==='number'&&isFinite(v)){return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10)}
+  v=String(v==null?'':v).trim();
+  let m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if(m)return m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);
+  m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  return today();
+}
+function buildFromRows(rowsF,rowsR){
+  const camps=[], cmap={}, fmap={};
+  let n=0;
+  function getCamp(name){
+    name=String(name==null?'':name).trim()||defaultCampaignName();
+    let c=cmap[name];if(!c){c={id:uid(),name:name,fincas:[]};cmap[name]=c;camps.push(c)}
+    return c;
+  }
+  function getFinca(cn,fn,variety){
+    const c=getCamp(cn);fn=String(fn==null?'':fn).trim();if(!fn)return null;
+    const k=c.id+'|'+fn.toLowerCase();let f=fmap[k];
+    if(!f){f={id:uid(),name:fn,variety:String(variety==null?'':variety).trim(),ord:Date.now()+(n++),records:[]};fmap[k]=f;c.fincas.push(f)}
+    return f;
+  }
+  rowsF.forEach(function(r){
+    const f=getFinca(r['Campaña'],r['Finca'],r['Variedad']);if(!f)return;
+    if(String(r['Estado']||'').toLowerCase().indexOf('recolect')===0){f.done=true;f.doneDate=parseDate(r['Fecha fin'])}
+  });
+  let nrec=0;const plates={};
+  rowsR.forEach(function(r,i){
+    const f=getFinca(r['Campaña'],r['Finca'],r['Variedad']);if(!f)return;
+    const rec={id:uid(),ts:Date.now()+i,fecha:parseDate(r['Fecha']),mat:String(r['Matrícula']==null?'':r['Matrícula']).trim().toUpperCase(),
+      ce:num(r['Cajas entrada']),pe:num(r['Palet entrada']),tara:num(r['Tara']),bruto:num(r['Bruto']),
+      cs:num(r['Cajas salida']),ps:num(r['Palet salida']),obs:String(r['Observaciones']==null?'':r['Observaciones']).trim()};
+    f.records.push(rec);nrec++;if(rec.mat)plates[rec.mat]=1;
+  });
+  return {camps:camps,plates:Object.keys(plates),nrec:nrec};
+}
+let pendingImport=null;
+async function importFile(file){
+  if(!file)return;
+  if(!window.XLSX){openSheet('<h2>Restaurar desde Excel</h2><div class="warn">El lector de Excel no se ha cargado. Conecta a internet una vez, ábrela de nuevo y reintenta.</div><button class="btn block" data-act="close">Cerrar</button>');return}
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    if(!wb.Sheets['Fincas']||!wb.Sheets['Registros'])throw new Error('formato');
+    const rowsF=XLSX.utils.sheet_to_json(wb.Sheets['Fincas'],{defval:''});
+    const rowsR=XLSX.utils.sheet_to_json(wb.Sheets['Registros'],{defval:''});
+    const out=buildFromRows(rowsF,rowsR);
+    if(!out.camps.length)throw new Error('vacio');
+    pendingImport=out;
+    const nf=out.camps.reduce((a,c)=>a+c.fincas.length,0);
+    openSheet('<h2>Restaurar desde Excel</h2>'+
+      '<div class="note" style="color:var(--ink);font-size:15px">Se han encontrado <b>'+out.camps.length+'</b> campaña(s), <b>'+nf+'</b> fincas y <b>'+out.nrec+'</b> registros.</div>'+
+      '<div class="warn">Esto sustituye todos los datos actuales de la app. Si no estás seguro, cancela y haz antes una copia.</div>'+
+      '<div class="row wrap2"><button class="btn" data-act="import-ok">Reemplazar datos</button><button class="btn ghost" data-act="close">Cancelar</button></div>');
+  }catch(e){
+    openSheet('<h2>Restaurar desde Excel</h2><div class="warn">Este archivo no parece una copia de seguridad de la app. Usa un Excel generado con el botón «Excel».</div><button class="btn block" data-act="close">Cerrar</button>');
+  }
+}
+function applyImport(){
+  const o=pendingImport;if(!o)return;
+  S.campaigns=o.camps;S.current=o.camps[o.camps.length-1].id;
+  S.plates=Array.from(new Set(S.plates.concat(o.plates))).sort();
+  o.camps.forEach(c=>c.fincas.forEach(f=>{if(f.variety)registerVariety(f.variety,'otra')}));
+  pendingImport=null;
+  save();closeSheet();V={name:'home',id:null};render();
+  setStatus('Datos restaurados desde Excel · '+hhmm());
 }
 
 const camp=()=>S.campaigns.find(c=>c.id===S.current);
@@ -336,6 +429,7 @@ function render(){
   $('tabDone').setAttribute('aria-current',tab==='done'?'page':'false');
   $('tabKilos').setAttribute('aria-current',tab==='kilos'?'page':'false');
   $('tabEnvases').setAttribute('aria-current',tab==='envases'?'page':'false');
+  backupBanner();
 }
 
 function campSelect(){
@@ -562,7 +656,11 @@ function settings(){
     '<button class="btn" data-act="add-camp">Crear campaña</button></div>'+
     '<div class="grp">Matrículas guardadas</div>'+
     (S.plates.length?'<div class="plates">'+S.plates.map((p,i)=>'<span class="chip">'+esc(p)+'<button data-act="del-plate" data-i="'+i+'" aria-label="Quitar '+esc(p)+'">×</button></span>').join('')+'</div>':'<div class="note">Se guardan solas al registrar una matrícula.</div>')+
-    '<div class="grp">Copia de seguridad</div>'+
+    '<div class="grp">Copia de seguridad en Excel</div>'+
+    '<div class="note">'+(S.lastBackup?'Última copia: '+showDate(S.lastBackup)+'.':'Todavía no has hecho ninguna copia.')+' La app te avisa si pasan más de '+BACKUP_DIAS+' días.</div>'+
+    '<div class="row wrap2" style="margin-bottom:6px"><button class="btn" data-act="excel">Hacer copia (Excel)</button><button class="btn ghost" data-act="pick-xlsx">Restaurar desde Excel</button></div>'+
+    '<input type="file" id="xlsxIn" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">'+
+    '<div class="grp">Copia en texto (opcional)</div>'+
     '<div class="note">Los datos se guardan solos en este móvil. Esta copia en texto sirve para pasarlos a otro dispositivo o como respaldo: para restaurar, pégala aquí.</div>'+
     '<label class="fld"><textarea id="backup">'+esc(json)+'</textarea></label>'+
     '<div class="row wrap2"><button class="btn ghost" data-act="copy-backup">Copiar</button><button class="btn ghost" data-act="restore">Restaurar desde el texto</button><span class="spacer"></span><button class="btn" data-act="close">Cerrar</button></div>');
@@ -646,6 +744,8 @@ document.addEventListener('click',function(e){
     save();closeSheet();V={name:'home',id:null};render();return;
   }
   if(a==='del-plate'){S.plates.splice(+t.dataset.i,1);save();settings();return}
+  if(a==='pick-xlsx'){const fi=$('xlsxIn');if(fi)fi.click();return}
+  if(a==='import-ok'){applyImport();return}
   if(a==='copy-backup'){
     const ta=$('backup');ta.select();
     try{navigator.clipboard.writeText(ta.value);t.textContent='Copiado'}catch(err){try{document.execCommand('copy');t.textContent='Copiado'}catch(e2){}}
@@ -669,6 +769,7 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   if(e.target.id==='campSel'){S.current=e.target.value;F.variedad='';F.patron='';save();render()}
   else if(e.target.id==='lVar'||e.target.id==='lModo'){updateListing()}
+  else if(e.target.id==='xlsxIn'){const fl=e.target.files&&e.target.files[0];e.target.value='';importFile(fl)}
   else if(e.target.id==='fVarSel'){
     const box=$('newVarBox');box.style.display=e.target.value==='__new__'?'block':'none';
     if(e.target.value==='__new__')setTimeout(function(){$('fVarNew').focus()},30);
