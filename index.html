@@ -139,7 +139,7 @@ td.s{color:var(--stock);font-weight:600}
     <h1 id="title">Control de fincas</h1>
     <div class="row"><button class="iconbtn" data-act="excel">Excel</button><button class="iconbtn" data-act="settings" aria-label="Ajustes">Ajustes</button></div>
   </div>
-  <div class="status"><span id="status">Datos en este móvil</span></div>
+  <div class="status"><span id="status">Datos en este móvil</span><button class="iconbtn" data-act="pick-xlsx">Importar Excel</button></div>
   <div id="warn"></div>
   <div id="bk"></div>
   <main id="app"></main>
@@ -151,6 +151,7 @@ td.s{color:var(--stock);font-weight:600}
   <button data-act="tab-envases" id="tabEnvases">Resumen envases</button>
 </nav>
 <div id="layer"></div>
+<input type="file" id="xlsxIn" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">
 
 <script>
 (function(){
@@ -254,7 +255,7 @@ async function pdfSummary(){
 function fincaPage(doc,f){
   const t=totals(f);
   doc.setTextColor(20);doc.setFontSize(18);doc.text(f.name,14,16);
-  doc.setFontSize(11);doc.text((f.variety||'Sin variedad')+'  -  '+camp().name+'  -  '+(f.done?'Recolectada el '+showDate(f.doneDate):'En curso'),14,23);
+  doc.setFontSize(11);doc.text((f.owner?'Propietario: '+f.owner+'  -  ':'')+(f.variety||'Sin variedad')+'  -  '+camp().name+'  -  '+(f.done?'Recolectada el '+showDate(f.doneDate):'En curso'),14,23);
   doc.text('Kilos totales: '+fmt(t.kg,1)+'     Stock cajas: '+fmt(t.c)+'     Stock palet: '+fmt(t.p),14,30);
   const recs=f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0));
   doc.autoTable({startY:35,margin:{left:10,right:10},styles:{fontSize:8,cellPadding:1.6,valign:'top'},headStyles:HEAD,footStyles:FOOT,
@@ -277,13 +278,13 @@ async function pdfFincas(list,detail){
   if(!list.length){setStatus('No hay fincas seleccionadas');return}
   const doc=new J({unit:'mm',format:'a4',orientation:'landscape'});
   const T={kg:0,c:0,p:0};
-  const body=list.map(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;return [f.name,f.variety||'',f.done?showDate(f.doneDate):'En curso',fmt(t.kg,1),fmt(t.c),fmt(t.p)]});
+  const body=list.map(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;return [f.name,f.owner||'',f.variety||'',f.done?showDate(f.doneDate):'En curso',fmt(t.kg,1),fmt(t.c),fmt(t.p)]});
   doc.setTextColor(20);doc.setFontSize(18);doc.text('Listado de fincas',14,16);
   doc.setFontSize(11);doc.text(camp().name+'  -  '+showDate(today())+'  -  '+list.length+(list.length===1?' finca':' fincas'),14,23);
   doc.autoTable({startY:29,margin:{left:14,right:14},styles:{fontSize:10},headStyles:HEAD,footStyles:FOOT,
-    head:[['Finca','Variedad','Fin recolección','Kilos totales','Stock cajas','Stock palet']],
-    body:body,foot:[['Total','','',fmt(T.kg,1),fmt(T.c),fmt(T.p)]],
-    columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}}});
+    head:[['Finca','Propietario','Variedad','Fin recolección','Kilos totales','Stock cajas','Stock palet']],
+    body:body,foot:[['Total','','','',fmt(T.kg,1),fmt(T.c),fmt(T.p)]],
+    columnStyles:{4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}}});
   if(detail){list.forEach(function(f){doc.addPage();fincaPage(doc,f)})}
   pageNumbers(doc);
   await shareFile(doc.output('blob'),safeName('Fincas ('+list.length+') '+today())+'.pdf','application/pdf');
@@ -291,7 +292,7 @@ async function pdfFincas(list,detail){
 }
 
 /* ---------- copia de seguridad en Excel ---------- */
-const BACKUP_DIAS=7;
+const BACKUP_DIAS=1;
 function daysSince(iso){
   const a=new Date(iso+'T00:00:00'), b=new Date(today()+'T00:00:00');
   return Math.round((b-a)/86400000);
@@ -303,8 +304,16 @@ function backupBanner(){
   const d=S.lastBackup?daysSince(S.lastBackup):null;
   if(d!==null&&d<BACKUP_DIAS){el.innerHTML='';return}
   el.innerHTML='<div class="warn"><b>Copia de seguridad.</b> '+
-    (d===null?'Todavía no has hecho ninguna copia en Excel.':'Hace '+d+(d===1?' día':' días')+' de tu última copia en Excel.')+
+    (d===null?'Todavía no has hecho ninguna copia en Excel.':d===1?'La última copia en Excel fue ayer. Haz la de hoy.':'Hace '+d+' días de tu última copia en Excel.')+
     '<button class="iconbtn" style="min-height:36px;margin-top:8px;display:block" data-act="excel">Hacer copia ahora</button></div>';
+}
+function startupReminder(){
+  const hasData=S.campaigns.some(c=>c.fincas.some(f=>f.records.length));
+  if(!hasData||S.lastBackup===today()||S.lastPrompt===today())return;
+  S.lastPrompt=today();save();
+  openSheet('<h2>Copia de seguridad de hoy</h2>'+
+    '<div class="note" style="color:var(--ink);font-size:15px">'+(S.lastBackup?'Tu última copia en Excel es del '+showDate(S.lastBackup)+'.':'Todavía no has hecho ninguna copia en Excel.')+' Guárdala ahora para no perder datos.</div>'+
+    '<div class="row wrap2"><button class="btn" data-act="excel-reminder">Hacer copia ahora</button><button class="btn ghost" data-act="close">Más tarde</button></div>');
 }
 function markBackup(){S.lastBackup=today();save();backupBanner()}
 
@@ -315,20 +324,20 @@ async function exportXlsx(){
   const T={kg:0,c:0,p:0};
   c.fincas.forEach(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;res.push([f.name,f.variety||'',r2(t.kg),t.c,t.p])});
   res.push(['Total '+c.name,'',r2(T.kg),T.c,T.p]);
-  const fin=[['Campaña','Finca','Variedad','Estado','Fecha fin']];
-  const reg=[['Campaña','Finca','Variedad','Fecha','Matrícula','Cajas entrada','Palet entrada','Tara','Bruto','Cajas salida','Palet salida','Stock cajas','Stock palet','Peso neto kg','Observaciones']];
+  const fin=[['Campaña','Finca','Variedad','Propietario','Estado','Fecha fin']];
+  const reg=[['Campaña','Finca','Variedad','Propietario','Fecha','Matrícula','Cajas entrada','Palet entrada','Tara','Bruto','Cajas salida','Palet salida','Stock cajas','Stock palet','Peso neto kg','Observaciones']];
   S.campaigns.forEach(function(cp){
     cp.fincas.forEach(function(f){
-      fin.push([cp.name,f.name,f.variety||'',f.done?'Recolectada':'En curso',f.done?showDate(f.doneDate):'']);
+      fin.push([cp.name,f.name,f.variety||'',f.owner||'',f.done?'Recolectada':'En curso',f.done?showDate(f.doneDate):'']);
       f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0)).forEach(function(r){
-        reg.push([cp.name,f.name,f.variety||'',showDate(r.fecha),r.mat||'',num(r.ce),num(r.pe),num(r.tara),num(r.bruto),num(r.cs),num(r.ps),stockC(r),stockP(r),r2(neto(r)),r.obs||'']);
+        reg.push([cp.name,f.name,f.variety||'',f.owner||'',showDate(r.fecha),r.mat||'',num(r.ce),num(r.pe),num(r.tara),num(r.bruto),num(r.cs),num(r.ps),stockC(r),stockP(r),r2(neto(r)),r.obs||'']);
       });
     });
   });
   const wb=XLSX.utils.book_new();
   const w1=XLSX.utils.aoa_to_sheet(res);w1['!cols']=[{wch:22},{wch:18},{wch:15},{wch:13},{wch:13}];
-  const w2=XLSX.utils.aoa_to_sheet(fin);w2['!cols']=[{wch:20},{wch:22},{wch:18},{wch:13},{wch:12}];
-  const w3=XLSX.utils.aoa_to_sheet(reg);w3['!cols']=[{wch:20},{wch:20},{wch:16},{wch:12},{wch:12},{wch:13},{wch:13},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:34}];
+  const w2=XLSX.utils.aoa_to_sheet(fin);w2['!cols']=[{wch:20},{wch:22},{wch:18},{wch:22},{wch:13},{wch:12}];
+  const w3=XLSX.utils.aoa_to_sheet(reg);w3['!cols']=[{wch:20},{wch:20},{wch:16},{wch:22},{wch:12},{wch:12},{wch:13},{wch:13},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:34}];
   XLSX.utils.book_append_sheet(wb,w1,'Resumen');
   XLSX.utils.book_append_sheet(wb,w2,'Fincas');
   XLSX.utils.book_append_sheet(wb,w3,'Registros');
@@ -366,19 +375,20 @@ function buildFromRows(rowsF,rowsR){
     let c=cmap[name];if(!c){c={id:uid(),name:name,fincas:[]};cmap[name]=c;camps.push(c)}
     return c;
   }
-  function getFinca(cn,fn,variety){
+  function getFinca(cn,fn,variety,owner){
     const c=getCamp(cn);fn=String(fn==null?'':fn).trim();if(!fn)return null;
     const k=c.id+'|'+fn.toLowerCase();let f=fmap[k];
-    if(!f){f={id:uid(),name:fn,variety:String(variety==null?'':variety).trim(),ord:Date.now()+(n++),records:[]};fmap[k]=f;c.fincas.push(f)}
+    if(!f){f={id:uid(),name:fn,owner:'',variety:String(variety==null?'':variety).trim(),ord:Date.now()+(n++),records:[]};fmap[k]=f;c.fincas.push(f)}
+    if(!f.owner&&owner!=null&&String(owner).trim())f.owner=String(owner).trim();
     return f;
   }
   rowsF.forEach(function(r){
-    const f=getFinca(r['Campaña'],r['Finca'],r['Variedad']);if(!f)return;
+    const f=getFinca(r['Campaña'],r['Finca'],r['Variedad'],r['Propietario']);if(!f)return;
     if(String(r['Estado']||'').toLowerCase().indexOf('recolect')===0){f.done=true;f.doneDate=parseDate(r['Fecha fin'])}
   });
   let nrec=0;const plates={};
   rowsR.forEach(function(r,i){
-    const f=getFinca(r['Campaña'],r['Finca'],r['Variedad']);if(!f)return;
+    const f=getFinca(r['Campaña'],r['Finca'],r['Variedad'],r['Propietario']);if(!f)return;
     const rec={id:uid(),ts:Date.now()+i,fecha:parseDate(r['Fecha']),mat:String(r['Matrícula']==null?'':r['Matrícula']).trim().toUpperCase(),
       ce:num(r['Cajas entrada']),pe:num(r['Palet entrada']),tara:num(r['Tara']),bruto:num(r['Bruto']),
       cs:num(r['Cajas salida']),ps:num(r['Palet salida']),obs:String(r['Observaciones']==null?'':r['Observaciones']).trim()};
@@ -463,7 +473,7 @@ function campSelect(){
 
 function fincaCard(f){
   const t=totals(f);
-  const inner='<div class="nm">'+esc(f.name)+'</div><div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
+  const inner='<div class="nm">'+esc(f.name)+'</div>'+(f.owner?'<div class="vr">Propietario: '+esc(f.owner)+'</div>':'')+'<div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
     '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,1)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock cajas</div><div class="v">'+fmt(t.c)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div>';
@@ -486,7 +496,7 @@ function selBar(list){
 function homeView(){
   const c=camp(), act=c.fincas.filter(f=>!f.done);
   let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'<span class="spacer"></span><button class="btn" data-act="new-finca">Añadir finca</button></div>';
-  if(!c.fincas.length) h+='<div class="empty">Aún no hay fincas en esta campaña.<br>Toca «Añadir finca» para crear la primera.</div>';
+  if(!c.fincas.length) h+='<div class="empty">Aún no hay fincas en esta campaña.<br>Toca «Añadir finca» para crear la primera.<br><br>¿Has perdido los datos? <button class="btn ghost" style="margin-top:8px" data-act="pick-xlsx">Importar Excel guardado</button></div>';
   else if(!act.length) h+='<div class="empty">Todas las fincas están recolectadas.<br>Las tienes en la pestaña «Recolectadas».</div>';
   else h+=selBar(act)+act.map(fincaCard).join('');
   return h;
@@ -501,7 +511,7 @@ function doneView(){
 function fincaView(f){
   const t=totals(f);
   let h='<div class="row" style="margin-bottom:10px"><button class="iconbtn" data-act="back">Volver</button><span class="spacer"></span><button class="iconbtn" data-act="edit-finca">Editar finca</button></div>';
-  h+='<section class="head"><h2 class="nm">'+esc(f.name)+'</h2><div class="vr">'+esc(f.variety||'Sin variedad')+'</div>'+(f.done?'<div class="vr">Recolectada el '+showDate(f.doneDate)+'</div>':'')+
+  h+='<section class="head"><h2 class="nm">'+esc(f.name)+'</h2>'+(f.owner?'<div class="vr">Propietario: '+esc(f.owner)+'</div>':'')+'<div class="vr">'+esc(f.variety||'Sin variedad')+'</div>'+(f.done?'<div class="vr">Recolectada el '+showDate(f.doneDate)+'</div>':'')+
      '<div class="kg">'+fmt(t.kg,1)+'<small>kg totales</small></div>'+
      '<div class="two"><div><div class="l">Stock cajas finca</div><div class="v">'+fmt(t.c)+'</div></div>'+
      '<div><div class="l">Stock palet finca</div><div class="v">'+fmt(t.p)+'</div></div></div></section>';
@@ -516,7 +526,7 @@ function fincaView(f){
     const list=f.records.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||(b.ts||0)-(a.ts||0));
     h+=list.map(r=>
       '<div class="card rec" data-act="edit-rec" data-id="'+r.id+'">'+
-      '<div class="r1"><div><span class="dt">'+showDate(r.fecha)+'</span> <span class="mt">'+esc(r.mat||'sin matrícula')+'</span></div>'+
+      '<div class="r1"><div><span class="dt">'+showDate(r.fecha)+'</span> <span class="mt">'+esc(r.mat||'sin matrícula')+'</span>'+(f.owner?'<div class="mt" style="letter-spacing:0">Propietario: '+esc(f.owner)+'</div>':'')+'</div>'+
       '<div class="neto">'+fmt(neto(r),1)+' <small>kg</small></div></div>'+
       '<div class="grid">'+
       '<div><span>Entrada cajas / palet</span><b>'+fmt(num(r.ce))+' / '+fmt(num(r.pe))+'</b></div>'+
@@ -645,6 +655,7 @@ function varietyOptions(cur){
 function fincaForm(f){
   openSheet('<h2>'+(f?'Editar finca':'Nueva finca')+'</h2>'+
     '<label class="fld"><span>Finca</span><input id="fName" value="'+esc(f?f.name:'')+'" autocomplete="off"></label>'+
+    '<label class="fld"><span>Propietario</span><input id="fOwner" value="'+esc(f&&f.owner?f.owner:'')+'" autocomplete="off"></label>'+
     '<label class="fld"><span>Variedad</span><select id="fVarSel">'+varietyOptions(f?f.variety:'')+'</select></label>'+
     '<div id="newVarBox" style="display:none"><div class="g2">'+
       '<label class="fld"><span>Nombre de la variedad nueva</span><input id="fVarNew" autocomplete="off"></label>'+
@@ -695,9 +706,8 @@ function settings(){
     '<div class="grp">Matrículas guardadas</div>'+
     (S.plates.length?'<div class="plates">'+S.plates.map((p,i)=>'<span class="chip">'+esc(p)+'<button data-act="del-plate" data-i="'+i+'" aria-label="Quitar '+esc(p)+'">×</button></span>').join('')+'</div>':'<div class="note">Se guardan solas al registrar una matrícula.</div>')+
     '<div class="grp">Copia de seguridad en Excel</div>'+
-    '<div class="note">'+(S.lastBackup?'Última copia: '+showDate(S.lastBackup)+'.':'Todavía no has hecho ninguna copia.')+' La app te avisa si pasan más de '+BACKUP_DIAS+' días.</div>'+
+    '<div class="note">'+(S.lastBackup?'Última copia: '+showDate(S.lastBackup)+'.':'Todavía no has hecho ninguna copia.')+' La app te lo recuerda cada día al abrirla.</div>'+
     '<div class="row wrap2" style="margin-bottom:6px"><button class="btn" data-act="excel">Hacer copia (Excel)</button><button class="btn ghost" data-act="pick-xlsx">Restaurar desde Excel</button></div>'+
-    '<input type="file" id="xlsxIn" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">'+
     '<div class="grp">Copia en texto (opcional)</div>'+
     '<div class="note">Los datos se guardan solos en este móvil. Esta copia en texto sirve para pasarlos a otro dispositivo o como respaldo: para restaurar, pégala aquí.</div>'+
     '<label class="fld"><textarea id="backup">'+esc(json)+'</textarea></label>'+
@@ -769,8 +779,9 @@ document.addEventListener('click',function(e){
       variety=canonicalVariety(nn);
       registerVariety(variety,$('fVarType').value);
     }
-    if(t.dataset.id){const f=finca(t.dataset.id);f.name=name;f.variety=variety}
-    else camp().fincas.push({id:uid(),name:name,variety:variety,ord:Date.now(),records:[]});
+    const owner=$('fOwner').value.trim();
+    if(t.dataset.id){const f=finca(t.dataset.id);f.name=name;f.variety=variety;f.owner=owner}
+    else camp().fincas.push({id:uid(),name:name,owner:owner,variety:variety,ord:Date.now(),records:[]});
     save();closeSheet();render();return;
   }
   if(a==='del-finca'){
@@ -803,6 +814,7 @@ document.addEventListener('click',function(e){
     save();closeSheet();V={name:'home',id:null};render();return;
   }
   if(a==='del-plate'){S.plates.splice(+t.dataset.i,1);save();settings();return}
+  if(a==='excel-reminder'){closeSheet();exportXlsx();return}
   if(a==='pick-xlsx'){const fi=$('xlsxIn');if(fi)fi.click();return}
   if(a==='import-ok'){applyImport();return}
   if(a==='copy-backup'){
@@ -835,7 +847,7 @@ document.addEventListener('change',function(e){
   }
 });
 
-load();render();save();
+load();render();save();startupReminder();
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
 setInterval(save,5*60*1000);
