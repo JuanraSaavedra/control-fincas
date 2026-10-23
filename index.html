@@ -56,6 +56,7 @@ button{cursor:pointer}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
 .btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
 .btn.block{width:100%}
+.btn:disabled{opacity:.45;cursor:default}
 .row{display:flex;gap:10px;align-items:center}
 .row.wrap2{flex-wrap:wrap}
 .spacer{flex:1}
@@ -107,6 +108,8 @@ td.s{color:var(--stock);font-weight:600}
 
 .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
 .tabs button{flex:1;border:0;background:transparent;min-height:56px;font-weight:600;color:var(--muted);font-size:13px;line-height:1.15;padding:0 2px}
+.chk{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;margin-right:12px}
+.chk.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .tag{display:inline-block;font-size:11px;font-weight:600;background:var(--soft);color:var(--muted);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle}
 .tabs button[aria-current="page"]{color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
 
@@ -155,6 +158,7 @@ const KEY='control-fincas-v1';
 const PESO_CAJA=2.5, PESO_PALET=25;
 let S=null, V={name:'home',id:null}, storageOK=true, delArm=false;
 let F={variedad:'',patron:'',modo:'todo'};
+let SEL={on:false,ids:{}};
 
 /* ---------- utilidades ---------- */
 const $=id=>document.getElementById(id);
@@ -247,14 +251,10 @@ async function pdfSummary(){
   setStatus('PDF generado · '+hhmm());
 }
 
-async function pdfFinca(){
-  const J=pdfLib();if(!J)return;
-  const f=finca(V.id);if(!f)return;
+function fincaPage(doc,f){
   const t=totals(f);
-  const doc=new J({unit:'mm',format:'a4',orientation:'landscape'});
   doc.setTextColor(20);doc.setFontSize(18);doc.text(f.name,14,16);
-  doc.setFontSize(11);doc.text((f.variety||'Sin variedad')+'  -  '+camp().name+'  -  '+showDate(today()),14,23);
-  doc.setFontSize(11);
+  doc.setFontSize(11);doc.text((f.variety||'Sin variedad')+'  -  '+camp().name+'  -  '+(f.done?'Recolectada el '+showDate(f.doneDate):'En curso'),14,23);
   doc.text('Kilos totales: '+fmt(t.kg,1)+'     Stock cajas: '+fmt(t.c)+'     Stock palet: '+fmt(t.p),14,30);
   const recs=f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0));
   doc.autoTable({startY:35,margin:{left:10,right:10},styles:{fontSize:8,cellPadding:1.6,valign:'top'},headStyles:HEAD,footStyles:FOOT,
@@ -262,8 +262,31 @@ async function pdfFinca(){
     body:recs.map(r=>[showDate(r.fecha),r.mat||'',fmt(num(r.ce)),fmt(num(r.pe)),fmt(num(r.tara),1),fmt(num(r.bruto),1),fmt(num(r.cs)),fmt(num(r.ps)),fmt(stockC(r)),fmt(stockP(r)),fmt(neto(r),1),r.obs||'']),
     foot:[['Total','','','','','','','',fmt(t.c),fmt(t.p),fmt(t.kg,1),'']],
     columnStyles:{2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'},10:{halign:'right'},11:{cellWidth:60}}});
+}
+async function pdfFinca(){
+  const J=pdfLib();if(!J)return;
+  const f=finca(V.id);if(!f)return;
+  const doc=new J({unit:'mm',format:'a4',orientation:'landscape'});
+  fincaPage(doc,f);
   pageNumbers(doc);
   await shareFile(doc.output('blob'),safeName('Finca '+f.name+' '+today())+'.pdf','application/pdf');
+  setStatus('PDF generado · '+hhmm());
+}
+async function pdfFincas(list,detail){
+  const J=pdfLib();if(!J)return;
+  if(!list.length){setStatus('No hay fincas seleccionadas');return}
+  const doc=new J({unit:'mm',format:'a4',orientation:'landscape'});
+  const T={kg:0,c:0,p:0};
+  const body=list.map(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;return [f.name,f.variety||'',f.done?showDate(f.doneDate):'En curso',fmt(t.kg,1),fmt(t.c),fmt(t.p)]});
+  doc.setTextColor(20);doc.setFontSize(18);doc.text('Listado de fincas',14,16);
+  doc.setFontSize(11);doc.text(camp().name+'  -  '+showDate(today())+'  -  '+list.length+(list.length===1?' finca':' fincas'),14,23);
+  doc.autoTable({startY:29,margin:{left:14,right:14},styles:{fontSize:10},headStyles:HEAD,footStyles:FOOT,
+    head:[['Finca','Variedad','Fin recolección','Kilos totales','Stock cajas','Stock palet']],
+    body:body,foot:[['Total','','',fmt(T.kg,1),fmt(T.c),fmt(T.p)]],
+    columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}}});
+  if(detail){list.forEach(function(f){doc.addPage();fincaPage(doc,f)})}
+  pageNumbers(doc);
+  await shareFile(doc.output('blob'),safeName('Fincas ('+list.length+') '+today())+'.pdf','application/pdf');
   setStatus('PDF generado · '+hhmm());
 }
 
@@ -414,6 +437,7 @@ function totals(f){
 /* ---------- vistas ---------- */
 function render(){
   const app=$('app');
+  if(V.name!=='home'&&V.name!=='done')SEL.on=false;
   let tab=V.name==='summary'?(V.mode==='envases'?'envases':'kilos'):V.name==='done'?'done':'home';
   if(V.name==='finca'){
     const f=finca(V.id); if(!f){V={name:'home',id:null};return render()}
@@ -439,25 +463,39 @@ function campSelect(){
 
 function fincaCard(f){
   const t=totals(f);
-  return '<button class="card fcard" data-act="open-finca" data-id="'+f.id+'">'+
-    '<div class="nm">'+esc(f.name)+'</div><div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
+  const inner='<div class="nm">'+esc(f.name)+'</div><div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
     '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,1)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock cajas</div><div class="v">'+fmt(t.c)+'</div></div>'+
-    '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div></button>';
+    '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div>';
+  if(SEL.on){
+    const on=!!SEL.ids[f.id];
+    return '<button class="card fcard" data-act="toggle-sel" data-id="'+f.id+'" aria-pressed="'+on+'"'+(on?' style="border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)"':'')+'>'+
+      '<div class="row" style="align-items:flex-start"><span class="chk'+(on?' on':'')+'">'+(on?'✓':'')+'</span><div style="flex:1;min-width:0">'+inner+'</div></div></button>';
+  }
+  return '<button class="card fcard" data-act="open-finca" data-id="'+f.id+'">'+inner+'</button>';
+}
+function selCount(){return Object.keys(SEL.ids).filter(k=>SEL.ids[k]).length}
+function selBar(list){
+  if(!list.length) return '';
+  if(!SEL.on) return '<div class="row" style="margin-bottom:10px"><button class="iconbtn" data-act="sel-toggle">Seleccionar varias para PDF</button></div>';
+  const n=selCount();
+  return '<div class="card" style="border-color:var(--accent)"><div class="row wrap2"><b>'+n+(n===1?' finca seleccionada':' fincas seleccionadas')+'</b><span class="spacer"></span>'+
+    '<button class="iconbtn" data-act="sel-all">Todas</button><button class="iconbtn" data-act="sel-none">Ninguna</button></div>'+
+    '<div class="row" style="margin-top:10px"><button class="btn" style="flex:1" data-act="sel-pdf"'+(n?'':' disabled')+'>Generar PDF ('+n+')</button><button class="btn ghost" data-act="sel-cancel">Cancelar</button></div></div>';
 }
 function homeView(){
   const c=camp(), act=c.fincas.filter(f=>!f.done);
   let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'<span class="spacer"></span><button class="btn" data-act="new-finca">Añadir finca</button></div>';
   if(!c.fincas.length) h+='<div class="empty">Aún no hay fincas en esta campaña.<br>Toca «Añadir finca» para crear la primera.</div>';
   else if(!act.length) h+='<div class="empty">Todas las fincas están recolectadas.<br>Las tienes en la pestaña «Recolectadas».</div>';
-  else h+=act.map(fincaCard).join('');
+  else h+=selBar(act)+act.map(fincaCard).join('');
   return h;
 }
 function doneView(){
   const c=camp(), dn=c.fincas.filter(f=>f.done);
   let h='<div class="row" style="margin-bottom:12px">'+campSelect()+'</div>';
   if(!dn.length) return h+'<div class="empty">Todavía no hay fincas recolectadas.<br>Dentro de una finca, pulsa «Fin recolección» y pasará aquí.</div>';
-  return h+dn.map(fincaCard).join('');
+  return h+selBar(dn)+dn.map(fincaCard).join('');
 }
 
 function fincaView(f){
@@ -672,11 +710,32 @@ document.addEventListener('click',function(e){
   const a=t.dataset.act;
   if(a==='shade'){if(e.target===t)closeSheet();return}
   if(a==='close'){closeSheet();return}
-  if(a==='tab-home'){V={name:'home',id:null};render();window.scrollTo(0,0);return}
+  if(a==='tab-home'){SEL={on:false,ids:{}};V={name:'home',id:null};render();window.scrollTo(0,0);return}
   if(a==='tab-kilos'){V={name:'summary',mode:'kilos',id:null};render();window.scrollTo(0,0);return}
   if(a==='tab-envases'){V={name:'summary',mode:'envases',id:null};render();window.scrollTo(0,0);return}
   if(a==='back'){const ff=V.id?finca(V.id):null;V={name:ff&&ff.done?'done':'home',id:null};render();return}
-  if(a==='tab-done'){V={name:'done',id:null};render();window.scrollTo(0,0);return}
+  if(a==='tab-done'){SEL={on:false,ids:{}};V={name:'done',id:null};render();window.scrollTo(0,0);return}
+  if(a==='sel-toggle'){SEL={on:true,ids:{}};render();return}
+  if(a==='sel-cancel'){SEL={on:false,ids:{}};render();return}
+  if(a==='sel-none'){SEL.ids={};render();return}
+  if(a==='sel-all'){
+    const lst=camp().fincas.filter(f=>V.name==='done'?f.done:!f.done);
+    SEL.ids={};lst.forEach(f=>{SEL.ids[f.id]=true});render();return;
+  }
+  if(a==='toggle-sel'){SEL.ids[t.dataset.id]=!SEL.ids[t.dataset.id];render();return}
+  if(a==='sel-pdf'){
+    if(!selCount())return;
+    openSheet('<h2>PDF de '+selCount()+(selCount()===1?' finca':' fincas')+'</h2>'+
+      '<label class="fld"><span>Contenido</span><select id="selDet"><option value="1">Resumen + registros de cada finca</option><option value="0">Solo el resumen de las fincas</option></select></label>'+
+      '<div class="note">Se genera un único PDF y se abre la hoja de compartir una sola vez.</div>'+
+      '<div class="row wrap2"><button class="btn" data-act="do-sel-pdf">Generar PDF</button><button class="btn ghost" data-act="close">Cancelar</button></div>');
+    return;
+  }
+  if(a==='do-sel-pdf'){
+    const det=$('selDet').value==='1';
+    const lst=camp().fincas.filter(f=>SEL.ids[f.id]);
+    closeSheet();pdfFincas(lst,det);return;
+  }
   if(a==='end-finca'){
     const key='end'+t.dataset.id;
     if(delArm!==key){
@@ -767,7 +826,7 @@ document.addEventListener('input',function(e){
   if(e.target.id==='lPat')updateListing();
 });
 document.addEventListener('change',function(e){
-  if(e.target.id==='campSel'){S.current=e.target.value;F.variedad='';F.patron='';save();render()}
+  if(e.target.id==='campSel'){S.current=e.target.value;F.variedad='';F.patron='';SEL={on:false,ids:{}};save();render()}
   else if(e.target.id==='lVar'||e.target.id==='lModo'){updateListing()}
   else if(e.target.id==='xlsxIn'){const fl=e.target.files&&e.target.files[0];e.target.value='';importFile(fl)}
   else if(e.target.id==='fVarSel'){
