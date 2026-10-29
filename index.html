@@ -293,6 +293,19 @@ async function pdfFincas(list,detail){
 
 /* ---------- copia de seguridad en Excel ---------- */
 const BACKUP_DIAS=1;
+function seasonTag(){
+  const nm=S.campaigns.length?S.campaigns[S.campaigns.length-1].name:'';
+  const m=String(nm).match(/(\d{4})\s*[\/\-]\s*(\d{2,4})/)||String(nm).match(/(\d{2})\s*[\/\-]\s*(\d{2})/);
+  if(m)return m[1].slice(-2)+'-'+m[2].slice(-2);
+  const d=new Date(), y=d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;
+  return String(y).slice(-2)+'-'+String(y+1).slice(-2);
+}
+function nextCampaignName(){
+  const nm=S.campaigns.length?S.campaigns[S.campaigns.length-1].name:'';
+  const m=String(nm).match(/(\d{4})\s*[\/\-]\s*(\d{2,4})/);
+  if(m){const y=parseInt(m[1],10)+1;return 'Campaña '+y+'/'+String(y+1).slice(-2)}
+  return defaultCampaignName();
+}
 function daysSince(iso){
   const a=new Date(iso+'T00:00:00'), b=new Date(today()+'T00:00:00');
   return Math.round((b-a)/86400000);
@@ -342,7 +355,7 @@ async function exportXlsx(){
   XLSX.utils.book_append_sheet(wb,w2,'Fincas');
   XLSX.utils.book_append_sheet(wb,w3,'Registros');
   const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-  const name=safeName('Control fincas copia '+today())+'.xlsx';
+  const name='Control Recolección '+seasonTag()+' copia.xlsx';
   const mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const blob=new Blob([buf],{type:mime});
   try{
@@ -701,7 +714,7 @@ function settings(){
   const json=JSON.stringify(S);
   openSheet('<h2>Ajustes</h2>'+
     '<div class="grp">Campañas</div>'+
-    '<div class="row wrap2" style="margin-bottom:6px"><input id="newCamp" class="camp" style="flex:1;min-height:44px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 12px" placeholder="Ej. Campaña 2027/28" autocomplete="off">'+
+    '<div class="row wrap2" style="margin-bottom:6px"><input id="newCamp" class="camp" style="flex:1;min-height:44px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 12px" placeholder="Ej. Campaña 2027/28" value="'+esc(nextCampaignName())+'" autocomplete="off">'+
     '<button class="btn" data-act="add-camp">Crear campaña</button></div>'+
     '<div class="grp">Matrículas guardadas</div>'+
     (S.plates.length?'<div class="plates">'+S.plates.map((p,i)=>'<span class="chip">'+esc(p)+'<button data-act="del-plate" data-i="'+i+'" aria-label="Quitar '+esc(p)+'">×</button></span>').join('')+'</div>':'<div class="note">Se guardan solas al registrar una matrícula.</div>')+
