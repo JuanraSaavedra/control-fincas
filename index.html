@@ -275,8 +275,8 @@ async function pdfSummary(){
     doc.setFontSize(13);doc.text('Kilos',14,y+2);
     doc.autoTable({startY:y+5,margin:{left:14,right:14},styles:{fontSize:10},headStyles:HEAD,footStyles:FOOT,
       head:[['Finca','Variedad','Registros','Kilos totales']],
-      body:data.map(d=>[d.f.name,d.f.variety||'',String(d.f.records.length),fmt(d.t.kg,1)]),
-      foot:[['Total','',String(T.n),fmt(T.kg,1)]],
+      body:data.map(d=>[d.f.name,d.f.variety||'',String(d.f.records.length),fmt(d.t.kg,0)]),
+      foot:[['Total','',String(T.n),fmt(T.kg,0)]],
       columnStyles:{2:{halign:'right'},3:{halign:'right'}}});
     y=doc.lastAutoTable.finalY+10;
   }
@@ -299,12 +299,12 @@ function fincaPage(doc,f){
   const t=totals(f);
   doc.setTextColor(20);doc.setFontSize(18);doc.text(f.name,14,16);
   doc.setFontSize(11);doc.text((f.owner?'Propietario: '+f.owner+'  -  ':'')+(f.variety||'Sin variedad')+'  -  '+camp().name+'  -  '+(f.done?'Recolectada el '+showDate(f.doneDate):'En curso'),14,23);
-  doc.text('Kilos totales: '+fmt(t.kg,1)+'     Stock cajas: '+fmt(t.c)+'     Stock palet: '+fmt(t.p),14,30);
+  doc.text('Kilos totales: '+fmt(t.kg,0)+'     Stock cajas: '+fmt(t.c)+'     Stock palet: '+fmt(t.p),14,30);
   const recs=f.records.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.ts||0)-(b.ts||0));
   doc.autoTable({startY:35,margin:{left:10,right:10},styles:{fontSize:8,cellPadding:1.6,valign:'top'},headStyles:HEAD,footStyles:FOOT,
     head:[['Fecha','Matrícula','Cajas ent.','Palet ent.','Tara','Bruto','Cajas sal.','Palet sal.','Stock cajas','Stock palet','Neto kg','Observaciones']],
-    body:recs.map(r=>[showDate(r.fecha),r.mat||'',fmt(num(r.ce)),fmt(num(r.pe)),fmt(num(r.tara),1),fmt(num(r.bruto),1),fmt(num(r.cs)),fmt(num(r.ps)),fmt(stockC(r)),fmt(stockP(r)),fmt(neto(r),1),r.obs||'']),
-    foot:[['Total','','','','','','','',fmt(t.c),fmt(t.p),fmt(t.kg,1),'']],
+    body:recs.map(r=>[showDate(r.fecha),r.mat||'',fmt(num(r.ce)),fmt(num(r.pe)),fmt(num(r.tara),1),fmt(num(r.bruto),1),fmt(num(r.cs)),fmt(num(r.ps)),fmt(stockC(r)),fmt(stockP(r)),fmt(neto(r),0),r.obs||'']),
+    foot:[['Total','','','','','','','',fmt(t.c),fmt(t.p),fmt(t.kg,0),'']],
     columnStyles:{2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right'},8:{halign:'right'},9:{halign:'right'},10:{halign:'right'},11:{cellWidth:60}}});
 }
 async function pdfFinca(){
@@ -321,12 +321,12 @@ async function pdfFincas(list,detail){
   if(!list.length){setStatus('No hay fincas seleccionadas');return}
   const doc=new J({unit:'mm',format:'a4',orientation:'landscape'});
   const T={kg:0,c:0,p:0};
-  const body=list.map(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;return [f.name,f.owner||'',f.variety||'',f.done?showDate(f.doneDate):'En curso',fmt(t.kg,1),fmt(t.c),fmt(t.p)]});
+  const body=list.map(function(f){const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;return [f.name,f.owner||'',f.variety||'',f.done?showDate(f.doneDate):'En curso',fmt(t.kg,0),fmt(t.c),fmt(t.p)]});
   doc.setTextColor(20);doc.setFontSize(18);doc.text('Listado de fincas',14,16);
   doc.setFontSize(11);doc.text(camp().name+'  -  '+showDate(today())+'  -  '+list.length+(list.length===1?' finca':' fincas'),14,23);
   doc.autoTable({startY:29,margin:{left:14,right:14},styles:{fontSize:10},headStyles:HEAD,footStyles:FOOT,
     head:[['Finca','Propietario','Variedad','Fin recolección','Kilos totales','Stock cajas','Stock palet']],
-    body:body,foot:[['Total','','','',fmt(T.kg,1),fmt(T.c),fmt(T.p)]],
+    body:body,foot:[['Total','','','',fmt(T.kg,0),fmt(T.c),fmt(T.p)]],
     columnStyles:{4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}}});
   if(detail){list.forEach(function(f){doc.addPage();fincaPage(doc,f)})}
   pageNumbers(doc);
@@ -492,7 +492,8 @@ function neto(r){
   if(bruto===0) return 0;
   const envSal=num(r.cs)*PESO_CAJA+num(r.ps)*PESO_PALET;
   const envEnt=num(r.ce)*PESO_CAJA+num(r.pe)*PESO_PALET;
-  return (bruto-envSal)-(num(r.tara)-envEnt);
+  const v=(bruto-envSal)-(num(r.tara)-envEnt);
+  return Math.ceil(Math.round(v*100)/100);
 }
 const stockC=r=>num(r.ce)-num(r.cs);
 const stockP=r=>num(r.pe)-num(r.ps);
@@ -531,7 +532,7 @@ function campSelect(){
 function fincaCard(f){
   const t=totals(f);
   const inner='<div class="nm">'+esc(f.name)+(f.done&&hasEnv(f)?'<span class="envtag">📦 Envases en finca</span>':'')+'</div>'+(f.owner?'<div class="vr">Propietario: '+esc(f.owner)+'</div>':'')+'<div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
-    '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,1)+'</div></div>'+
+    '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,0)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock cajas</div><div class="v">'+fmt(t.c)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div>';
   if(SEL.on){
@@ -577,7 +578,7 @@ function fincaView(f){
   const t=totals(f);
   let h='<div class="row" style="margin-bottom:10px"><button class="iconbtn" data-act="back">Volver</button><span class="spacer"></span><button class="iconbtn" data-act="edit-finca">Editar finca</button></div>';
   h+='<section class="head"><h2 class="nm">'+esc(f.name)+'</h2>'+(f.owner?'<div class="vr">Propietario: '+esc(f.owner)+'</div>':'')+'<div class="vr">'+esc(f.variety||'Sin variedad')+'</div>'+(f.done?'<div class="vr">Recolectada el '+showDate(f.doneDate)+'</div>':'')+
-     '<div class="kg">'+fmt(t.kg,1)+'<small>kg totales</small></div>'+
+     '<div class="kg">'+fmt(t.kg,0)+'<small>kg totales</small></div>'+
      '<div class="two"><div><div class="l">Stock cajas finca</div><div class="v">'+fmt(t.c)+'</div></div>'+
      '<div><div class="l">Stock palet finca</div><div class="v">'+fmt(t.p)+'</div></div></div></section>';
   h+='<div class="row"><button class="btn" style="flex:1" data-act="new-rec">Nuevo registro</button><button class="btn ghost" data-act="pdf-finca">PDF finca</button></div>';
@@ -592,7 +593,7 @@ function fincaView(f){
     h+=list.map(r=>
       '<div class="card rec" data-act="edit-rec" data-id="'+r.id+'">'+
       '<div class="r1"><div><span class="dt">'+showDate(r.fecha)+'</span> <span class="mt">'+esc(r.mat||'sin matrícula')+'</span>'+(f.owner?'<div class="mt" style="letter-spacing:0">Propietario: '+esc(f.owner)+'</div>':'')+'</div>'+
-      '<div class="neto">'+fmt(neto(r),1)+' <small>kg</small></div></div>'+
+      '<div class="neto">'+fmt(neto(r),0)+' <small>kg</small></div></div>'+
       '<div class="grid">'+
       '<div><span>Entrada cajas / palet</span><b>'+fmt(num(r.ce))+' / '+fmt(num(r.pe))+'</b></div>'+
       '<div><span>Tara</span><b>'+fmt(num(r.tara),1)+'</b></div>'+
@@ -666,14 +667,14 @@ function summaryView(){
     const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;
     return envases
       ? '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+(t.c>0||t.p>0?'<span class="envtag">📦 En finca</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>'
-      : '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
+      : '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,0)+'</td></tr>';
   }).join('');
   const head=envases
     ? '<th>Finca</th><th>Variedad</th><th>Stock cajas</th><th>Stock palet</th>'
     : '<th>Finca</th><th>Variedad</th><th>Kilos totales</th>';
   const foot=envases
     ? '<td colspan="2">Total campaña</td><td>'+fmt(T.c)+'</td><td>'+fmt(T.p)+'</td>'
-    : '<td colspan="2">Total campaña</td><td>'+fmt(T.kg,1)+'</td>';
+    : '<td colspan="2">Total campaña</td><td>'+fmt(T.kg,0)+'</td>';
   h+='<div class="tablewrap"><table style="min-width:0"><thead><tr>'+head+'</tr></thead><tbody>'+rows+'</tbody><tfoot><tr>'+foot+'</tr></tfoot></table></div>';
   return h;
 }
@@ -759,7 +760,7 @@ function updatePreview(){
   const r=readRec();
   p.innerHTML='<div class="st"><div class="l">Stock cajas</div><div class="v">'+fmt(stockC(r))+'</div></div>'+
     '<div class="st"><div class="l">Stock palet</div><div class="v">'+fmt(stockP(r))+'</div></div>'+
-    '<div><div class="l">Peso neto kg</div><div class="v">'+fmt(neto(r),1)+'</div></div>';
+    '<div><div class="l">Peso neto kg</div><div class="v">'+fmt(neto(r),0)+'</div></div>';
 }
 
 function settings(){
