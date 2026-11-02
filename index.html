@@ -19,7 +19,7 @@
 <style>
 :root{
   --bg:#EEF1EA; --surface:#FFFFFF; --ink:#17261E; --muted:#5E6F64; --line:#D5DDD3;
-  --accent:#14634F; --accent-ink:#FFFFFF; --stock:#A85F00; --danger:#B3261E; --soft:#E3EBE2;
+  --accent:#14634F; --accent-ink:#FFFFFF; --stock:#D50000; --danger:#B3261E; --soft:#E3EBE2;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
@@ -27,12 +27,12 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#101814; --surface:#19241E; --ink:#E6EEE8; --muted:#93A598; --line:#2A3A31;
-    --accent:#4FC3A1; --accent-ink:#08140F; --stock:#F0B048; --danger:#FF8A80; --soft:#22312A;
+    --accent:#4FC3A1; --accent-ink:#08140F; --stock:#FF5252; --danger:#FF8A80; --soft:#22312A;
   }
 }
 :root[data-theme="dark"]{
   --bg:#101814; --surface:#19241E; --ink:#E6EEE8; --muted:#93A598; --line:#2A3A31;
-  --accent:#4FC3A1; --accent-ink:#08140F; --stock:#F0B048; --danger:#FF8A80; --soft:#22312A;
+  --accent:#4FC3A1; --accent-ink:#08140F; --stock:#FF5252; --danger:#FF8A80; --soft:#22312A;
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
@@ -70,7 +70,7 @@ select.camp{background:var(--surface);border:1px solid var(--line);border-radius
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 .stat .l{font-size:12px;color:var(--muted)}
 .stat .v{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:600;line-height:1.1}
-.stat.stk .v{color:var(--stock)}
+.stat.stk .v{color:var(--stock);font-weight:700}
 
 .head{background:var(--accent);color:var(--accent-ink);border-radius:16px;padding:16px;margin:0 0 12px}
 .head .nm{font-size:30px;line-height:1.05}
@@ -91,7 +91,7 @@ select.camp{background:var(--surface);border:1px solid var(--line);border-radius
 .rec .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 8px;margin-top:10px;font-size:13px}
 .rec .grid div span{display:block;color:var(--muted);font-size:11.5px}
 .rec .grid b{font-weight:600}
-.rec .stk b{color:var(--stock)}
+.rec .stk b{color:var(--stock);font-weight:700}
 .sec{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px}
 .sec h2{font-size:22px}
 
@@ -110,6 +110,8 @@ td.s{color:var(--stock);font-weight:600}
 .tabs button{flex:1;border:0;background:transparent;min-height:56px;font-weight:600;color:var(--muted);font-size:13px;line-height:1.15;padding:0 2px}
 .chk{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;margin-right:12px}
 .chk.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.envtag{display:inline-flex;align-items:center;gap:4px;background:var(--stock);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:2px 10px;margin-left:8px;vertical-align:middle;font-family:'Barlow',system-ui,sans-serif;letter-spacing:0}
+.bd{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;background:var(--stock);color:#fff;font-size:11px;font-weight:700;margin-left:4px;padding:0 5px;vertical-align:middle}
 .tag{display:inline-block;font-size:11px;font-weight:600;background:var(--soft);color:var(--muted);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle}
 .tabs button[aria-current="page"]{color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
 
@@ -130,7 +132,7 @@ td.s{color:var(--stock);font-weight:600}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft);border-radius:999px;padding:4px 6px 4px 12px;font-size:14px}
 .chip button{border:0;background:transparent;font-size:18px;line-height:1;color:var(--muted);min-width:28px;min-height:28px}
 .note{color:var(--muted);font-size:13px;margin:6px 0 10px}
-.warn{background:var(--soft);border-left:4px solid var(--stock);padding:8px 12px;border-radius:8px;font-size:14px;margin-bottom:10px}
+.warn{background:var(--soft);border-left:4px solid #E0A020;padding:8px 12px;border-radius:8px;font-size:14px;margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -477,6 +479,7 @@ function render(){
   $('tabKilos').setAttribute('aria-current',tab==='kilos'?'page':'false');
   $('tabEnvases').setAttribute('aria-current',tab==='envases'?'page':'false');
   backupBanner();
+  updateTabBadges();
 }
 
 function campSelect(){
@@ -486,7 +489,7 @@ function campSelect(){
 
 function fincaCard(f){
   const t=totals(f);
-  const inner='<div class="nm">'+esc(f.name)+'</div>'+(f.owner?'<div class="vr">Propietario: '+esc(f.owner)+'</div>':'')+'<div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
+  const inner='<div class="nm">'+esc(f.name)+(f.done&&hasEnv(f)?'<span class="envtag">📦 Envases en finca</span>':'')+'</div>'+(f.owner?'<div class="vr">Propietario: '+esc(f.owner)+'</div>':'')+'<div class="vr">'+esc(f.variety||'Sin variedad')+' · '+f.records.length+' registros'+(f.done?' · Fin '+showDate(f.doneDate):'')+'</div>'+
     '<div class="stats"><div class="stat"><div class="l">Kilos totales</div><div class="v">'+fmt(t.kg,1)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock cajas</div><div class="v">'+fmt(t.c)+'</div></div>'+
     '<div class="stat stk"><div class="l">Stock palet</div><div class="v">'+fmt(t.p)+'</div></div></div>';
@@ -496,6 +499,14 @@ function fincaCard(f){
       '<div class="row" style="align-items:flex-start"><span class="chk'+(on?' on':'')+'">'+(on?'✓':'')+'</span><div style="flex:1;min-width:0">'+inner+'</div></div></button>';
   }
   return '<button class="card fcard" data-act="open-finca" data-id="'+f.id+'">'+inner+'</button>';
+}
+function hasEnv(f){const t=totals(f);return t.c>0||t.p>0}
+function updateTabBadges(){
+  const fs=camp().fincas;
+  const nDone=fs.filter(f=>f.done&&hasEnv(f)).length, nAll=fs.filter(hasEnv).length;
+  const b=n=>n?'<span class="bd">'+n+'</span>':'';
+  $('tabDone').innerHTML='Recolectadas'+b(nDone);
+  $('tabEnvases').innerHTML='Resumen envases'+b(nAll);
 }
 function selCount(){return Object.keys(SEL.ids).filter(k=>SEL.ids[k]).length}
 function selBar(list){
@@ -613,7 +624,7 @@ function summaryView(){
   const rows=c.fincas.map(function(f){
     const t=totals(f);T.kg+=t.kg;T.c+=t.c;T.p+=t.p;
     return envases
-      ? '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>'
+      ? '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+(t.c>0||t.p>0?'<span class="envtag">📦 En finca</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="s">'+fmt(t.c)+'</td><td class="s">'+fmt(t.p)+'</td></tr>'
       : '<tr><td>'+esc(f.name)+(f.done?'<span class="tag">Recolectada</span>':'')+'</td><td>'+esc(f.variety)+'</td><td class="k">'+fmt(t.kg,1)+'</td></tr>';
   }).join('');
   const head=envases
