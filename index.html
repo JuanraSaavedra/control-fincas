@@ -180,9 +180,11 @@ select.camp{font-weight:700}
 <div class="wrap">
   <div class="top">
     <h1 id="title">Control de fincas</h1>
-    <div class="row"><button class="iconbtn" data-act="excel">Excel</button><button class="iconbtn" data-act="settings" aria-label="Ajustes">Ajustes</button></div>
+    <button class="iconbtn" data-act="settings" aria-label="Ajustes">Ajustes</button>
   </div>
-  <div class="status"><span id="status">Datos en este móvil</span><button class="iconbtn" data-act="pick-xlsx">Importar Excel</button></div>
+  <div class="status"><span id="status">Datos en este móvil</span></div>
+  <div class="row" style="margin-bottom:6px"><button class="btn" style="flex:1;min-height:46px" data-act="excel">Copia de seguridad</button><button class="btn ghost" style="min-height:46px" data-act="pick-xlsx">Importar Excel</button></div>
+  <div class="note" id="lastBk" style="margin:0 0 10px"></div>
   <div id="warn"></div>
   <div id="bk"></div>
   <main id="app"></main>
@@ -354,6 +356,8 @@ function daysSince(iso){
   return Math.round((b-a)/86400000);
 }
 function backupBanner(){
+  const lb=$('lastBk');
+  if(lb)lb.textContent=S.lastBackup?'Última copia en Excel: '+showDate(S.lastBackup):'Todavía no has hecho ninguna copia en Excel.';
   const el=$('bk');if(!el)return;
   const hasData=S.campaigns.some(c=>c.fincas.some(f=>f.records.length));
   if(!hasData){el.innerHTML='';return}
