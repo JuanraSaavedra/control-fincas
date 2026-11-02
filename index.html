@@ -12,13 +12,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="icono2-192.png">
 <link rel="apple-touch-icon" href="icono2-180.png">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
-  --bg:#EEF1EA; --surface:#FFFFFF; --ink:#17261E; --muted:#5E6F64; --line:#D5DDD3;
+  --bg:#EEF1EA; --surface:#FFFFFF; --ink:#0A1510; --muted:#3B4D42; --line:#B4C2B6;
   --accent:#14634F; --accent-ink:#FFFFFF; --stock:#D50000; --danger:#B3261E; --soft:#E3EBE2;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
@@ -26,12 +26,12 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#101814; --surface:#19241E; --ink:#E6EEE8; --muted:#93A598; --line:#2A3A31;
+    --bg:#101814; --surface:#19241E; --ink:#F5FAF6; --muted:#BCCBC0; --line:#3A4E42;
     --accent:#4FC3A1; --accent-ink:#08140F; --stock:#FF5252; --danger:#FF8A80; --soft:#22312A;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#101814; --surface:#19241E; --ink:#E6EEE8; --muted:#93A598; --line:#2A3A31;
+  --bg:#101814; --surface:#19241E; --ink:#F5FAF6; --muted:#BCCBC0; --line:#3A4E42;
   --accent:#4FC3A1; --accent-ink:#08140F; --stock:#FF5252; --danger:#FF8A80; --soft:#22312A;
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -133,6 +133,47 @@ td.s{color:var(--stock);font-weight:600}
 .chip button{border:0;background:transparent;font-size:18px;line-height:1;color:var(--muted);min-width:28px;min-height:28px}
 .note{color:var(--muted);font-size:13px;margin:6px 0 10px}
 .warn{background:var(--soft);border-left:4px solid #E0A020;padding:8px 12px;border-radius:8px;font-size:14px;margin-bottom:10px}
+
+/* ---- mejor legibilidad: texto más grande, negrita y contraste ---- */
+body{font-size:17px;font-weight:500}
+h1,h2,h3{font-weight:700}
+.top h1{font-size:30px}
+.fcard .nm{font-size:28px;font-weight:700}
+.fcard .vr{font-size:15.5px;font-weight:600;color:var(--muted)}
+.stat .l{font-size:13.5px;font-weight:600;color:var(--muted)}
+.stat .v{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.head .nm{font-size:34px;font-weight:700}
+.head .vr{font-size:16.5px;font-weight:600;opacity:1}
+.head .kg{font-size:60px}
+.head .l{font-size:14px;font-weight:600;opacity:1}
+.head .two .v{font-size:32px;font-weight:700}
+.rec .dt{font-size:18px;font-weight:700}
+.rec .mt{font-size:15.5px;font-weight:700;color:var(--ink)}
+.rec .neto{font-size:32px}
+.rec .neto small{font-size:15px;font-weight:600}
+.rec .grid{font-size:16px;gap:8px 10px}
+.rec .grid div span{font-size:13px;font-weight:600;color:var(--muted)}
+.rec .grid b{font-weight:700}
+.rec .obs{font-size:15.5px;font-weight:500}
+.sec h2{font-size:26px}
+th{font-size:14px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-bottom:0}
+td{font-size:16.5px;font-weight:500;font-variant-numeric:tabular-nums}
+td:first-child{font-weight:700}
+td.k,td.s{font-weight:700;font-size:18px}
+tfoot td{font-size:17px;font-weight:700;background:var(--soft);color:var(--ink);border-top:2px solid var(--accent)}
+.fld>span{font-size:14.5px;font-weight:600;color:var(--ink)}
+.fld input,.fld select,.fld textarea{font-size:17px;font-weight:600;border:1.5px solid var(--line)}
+.grp{font-size:21px;font-weight:700}
+.prev .l{font-size:13.5px;font-weight:600}
+.prev .v{font-size:30px}
+.note{font-size:14.5px;color:var(--muted);font-weight:500}
+.status{font-size:14px;font-weight:600}
+.tabs button{font-size:13.5px;font-weight:700}
+.btn{font-weight:700}
+.iconbtn{font-weight:600}
+.empty{font-size:16.5px;color:var(--ink);font-weight:500}
+select.camp{font-weight:700}
+.tag{font-size:12px;font-weight:700;color:var(--ink)}
 </style>
 </head>
 <body>
