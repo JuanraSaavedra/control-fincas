@@ -1,5 +1,5 @@
-const V = 'fincas-v4';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icono2-180.png', 'icono2-192.png', 'icono2-512.png'];
+const V = 'fincas-v5';
+const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icono3-180.png', 'icono3-192.png', 'icono3-512.png', 'icono3-maskable-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
